@@ -1,0 +1,143 @@
+# TEMPORÁRIO (sai do branch no commit seguinte): tira as capturas da ficha da App Store do app no ar, com Playwright,
+# e põe no log em base64 (WebP sem perda) para serem baixadas por quem não alcança o site nem os artefatos.
+name: Capturas App Store (temporário)
+
+on:
+  push:
+    branches:
+      - lojas
+    paths:
+      - '.github/workflows/capturas-apple-temp.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  capturas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Playwright e Chromium
+        run: |
+          mkdir -p "$RUNNER_TEMP/c" && cd "$RUNNER_TEMP/c"
+          npm init -y > /dev/null
+          npm install playwright@1.56.1 > /dev/null
+          npx playwright install --with-deps chromium > /dev/null
+          python3 -m pip install --quiet pillow
+      - name: Roteiro
+        run: |
+          cat > "$RUNNER_TEMP/c/capturas_apple.js" << 'ROTEIRO'
+          /* Capturas de tela da ficha da App Store, tiradas do app real com Playwright (Chromium), sem retoque.
+             Uso: node capturas_apple.js <pasta de saída> [base]   (base padrão: https://mgpecasautomotivas.github.io/)
+             Tamanhos (retrato, 3x): 6,9" 440x956 → 1320x2868 · 6,5" 414x896 → 1242x2688 · 6,3" 402x874 → 1206x2622.
+             O contexto imita o app do iPhone: user agent do iPhone + "MGCatalogoApp-iOS", window.MG_APP_LOJA = 'ios',
+             navigator.share presente (a ponte do app) e modo "instalado" (sem convites para instalar).
+             Variável LOCAL=1: as fotos da loja e o próprio app vêm de um servidor local (para testar o roteiro sem rede). */
+          'use strict';
+          const { chromium } = require('playwright');
+          const fs = require('fs'), path = require('path');
+
+          const SAIDA = path.resolve(process.argv[2] || 'capturas');
+          const BASE = process.argv[3] || 'https://mgpecasautomotivas.github.io/';
+          const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MGCatalogoApp-iOS';
+          const TAMANHOS = [
+            { pasta: 'iphone-6.9-1320x2868', w: 440, h: 956 },
+            { pasta: 'iphone-6.5-1242x2688', w: 414, h: 896 },
+            { pasta: 'iphone-6.3-1206x2622', w: 402, h: 874 }
+          ];
+          const LISTA = [
+            { codigo: 'MG001', qtd: 2 }, { codigo: 'MG076', qtd: 1 }, { codigo: 'MG1903', qtd: 4 },
+            { codigo: 'MG325', qtd: 2 }, { codigo: 'MG046', qtd: 2 }
+          ].map((x, i) => Object.assign({ adicionadoEm: '2026-11-02T1' + i + ':00:00.000Z' }, x));
+          const TELAS = [
+            { nome: '01-inicio', hash: '#/', esquema: 'light', espera: '.abas' },
+            { nome: '02-inicio-escuro', hash: '#/', esquema: 'dark', espera: '.abas' },
+            { nome: '03-ficha-da-peca', hash: '#/peca/MG001', esquema: 'light', espera: 'h1, .peca-cod, .ficha' },
+            { nome: '04-pecas-do-veiculo', hash: '#/veiculo/Volkswagen/Gol/2010?motor=1.6', esquema: 'light', espera: '.painel-res .lista .item-lista' },
+            { nome: '05-minha-lista', hash: '#/lista', esquema: 'light', espera: '.abas', lista: true }
+          ];
+
+          function initApp(lista) {
+            window.MG_APP_LOJA = 'ios';
+            try { Object.defineProperty(navigator, 'standalone', { get: function () { return true; }, configurable: true }); } catch (e) {}
+            try {
+              Object.defineProperty(navigator, 'share', { value: function () { return Promise.resolve(); }, configurable: true, writable: true });
+              Object.defineProperty(navigator, 'canShare', { value: function () { return true; }, configurable: true, writable: true });
+            } catch (e) {}
+            if (lista) { try { localStorage.setItem('mg-lista', JSON.stringify(lista)); } catch (e) {} }
+          }
+
+          async function esperarImagens(page) {
+            await page.waitForFunction(() => {
+              const vh = innerHeight;
+              return Array.from(document.images).filter(i => { const r = i.getBoundingClientRect(); return r.bottom > 0 && r.top < vh && r.width > 0; })
+                .every(i => i.complete && i.naturalWidth > 0);
+            }, null, { timeout: 25000 }).catch(() => console.log('  aviso: alguma imagem visível não carregou'));
+            await page.evaluate(() => document.fonts && document.fonts.ready);
+          }
+
+          (async () => {
+            const navegador = await chromium.launch();
+            const relatorio = [];
+            for (const t of TAMANHOS) {
+              fs.mkdirSync(path.join(SAIDA, t.pasta), { recursive: true });
+              for (const tela of TELAS) {
+                const ctx = await navegador.newContext({
+                  viewport: { width: t.w, height: t.h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true,
+                  userAgent: UA, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', colorScheme: tela.esquema
+                });
+                if (process.env.LOCAL_ROTAS) await require(path.resolve(process.env.LOCAL_ROTAS))(ctx);
+                await ctx.addInitScript(initApp, tela.lista ? LISTA : null);
+                const page = await ctx.newPage();
+                const erros = [];
+                page.on('pageerror', e => erros.push(e.message));
+                await page.goto(BASE + tela.hash, { waitUntil: 'load' });
+                await page.waitForSelector('#conteudo .abrindo', { state: 'detached', timeout: 30000 }).catch(() => {});
+                await page.waitForSelector(tela.espera, { timeout: 30000 });
+                await page.waitForLoadState('networkidle').catch(() => {});
+                await esperarImagens(page);
+                await page.waitForTimeout(800);
+                const info = await page.evaluate(() => ({ titulo: document.title, tema: getComputedStyle(document.body).backgroundColor,
+                  instalar: !!document.querySelector('.instalar-cartao, .faixa-instalar:not([hidden])'),
+                  imagens: Array.from(document.images).filter(i => i.complete && i.naturalWidth > 0).length + '/' + document.images.length,
+                  versao: (self.MG_CONFIG && self.MG_CONFIG.versao) || '' }));
+                const arq = path.join(SAIDA, t.pasta, tela.nome + '.png');
+                await page.screenshot({ path: arq, type: 'png' });
+                relatorio.push([t.pasta, tela.nome, JSON.stringify(info), erros.join(' | ')].join(' · '));
+                console.log(t.pasta, tela.nome, JSON.stringify(info), erros.length ? 'ERROS: ' + erros.join(' | ') : '');
+                await ctx.close();
+              }
+            }
+            await navegador.close();
+            fs.writeFileSync(path.join(SAIDA, 'relatorio.txt'), relatorio.join('\n') + '\n');
+          })().catch(e => { console.error(e); process.exit(1); });
+
+          ROTEIRO
+      - name: Capturar do app no ar
+        working-directory: ${{ runner.temp }}/c
+        run: node capturas_apple.js saida https://mgpecasautomotivas.github.io/
+      - name: Conferir e imprimir no log (WebP sem perda, base64)
+        working-directory: ${{ runner.temp }}/c
+        run: |
+          python3 - << 'PY'
+          import base64, glob, io, os
+          from PIL import Image
+          print(open('saida/relatorio.txt').read())
+          for f in sorted(glob.glob('saida/*/*.png')):
+              im = Image.open(f)
+              b = io.BytesIO(); im.save(b, 'WEBP', lossless=True, quality=100, method=6)
+              nome = os.path.relpath(f, 'saida')
+              print('CAPTURA-INICIO', nome, im.size, im.mode, len(b.getvalue()))
+              s = base64.b64encode(b.getvalue()).decode()
+              for i in range(0, len(s), 200):
+                  print('C|' + s[i:i + 200])
+              print('CAPTURA-FIM', nome)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capturas-app-store
+          path: ${{ runner.temp }}/c/saida/
+          retention-days: 7
