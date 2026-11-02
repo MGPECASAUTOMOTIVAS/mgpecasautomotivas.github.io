@@ -186,7 +186,11 @@ jobs:
           ASC_KEY_P8_B64: ${{ secrets.ASC_KEY_P8_B64 }}
         run: |
           D="$RUNNER_TEMP/asc"; mkdir -p "$D"; chmod 700 "$D"
-          printf '%s' "$ASC_KEY_P8_B64" | tr -d '\n\r ' | base64 --decode > "$D/AuthKey.p8"
+          if printf '%s' "$ASC_KEY_P8_B64" | grep -q "BEGIN PRIVATE KEY"; then
+            printf '%s\n' "$ASC_KEY_P8_B64" > "$D/AuthKey.p8"   # colado como texto do .p8 (também vale)
+          else
+            printf '%s' "$ASC_KEY_P8_B64" | tr -d '\n\r ' | base64 --decode > "$D/AuthKey.p8"
+          fi
           if ! grep -q "BEGIN PRIVATE KEY" "$D/AuthKey.p8"; then
             echo "::error::O segredo ASC_KEY_P8_B64 não é o arquivo .p8 em base64 (veja lojas/apple/GUIA_APPLE.md)."
             exit 1

@@ -14,12 +14,18 @@ permissions:
 
 jobs:
   capturas:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Conferir endereços (página de contato da loja, privacidade)
+        run: |
+          for u in https://mgpecasautomotivas.com.br/contato/ https://mgpecasautomotivas.github.io/privacidade.html https://mgpecasautomotivas.com.br/; do
+            curl -sS -L -A 'Mozilla/5.0' -o /tmp/p.html -w "%{http_code} %{url_effective}\n" "$u" || true
+            python3 -c "import re,html;t=open('/tmp/p.html',errors='replace').read();m=re.search(r'<title>(.*?)</title>',t,re.S);print('  titulo:',html.unescape(m.group(1)).strip() if m else None);print('  form:', '<form' in t.lower(), '· tamanho:', len(t))"
+          done
       - name: Playwright e Chromium
         run: |
           mkdir -p "$RUNNER_TEMP/c" && cd "$RUNNER_TEMP/c"
