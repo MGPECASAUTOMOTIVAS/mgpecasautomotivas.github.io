@@ -12,7 +12,8 @@
 # Segredos do "enviar" (Settings → Secrets and variables → Actions → New repository secret), ver lojas/apple/GUIA_APPLE.md:
 #   ASC_KEY_ID       ID da chave da API do App Store Connect (10 caracteres)
 #   ASC_ISSUER_ID    Issuer ID (aparece no alto da página das chaves)
-#   ASC_KEY_P8_B64   o arquivo AuthKey_XXXXXXXXXX.p8 em base64 (nunca no repositório)
+#   ASC_KEY_P8_B64   a chave AuthKey_XXXXXXXXXX.p8: o texto do arquivo (de BEGIN a END) ou o arquivo em base64
+#                    (nunca no repositório)
 #   APPLE_TEAM_ID    Team ID da conta de desenvolvedor (10 caracteres, em developer.apple.com → Membership details)
 # A chave precisa da função (role) Admin: só ela pode usar o certificado de distribuição gerenciado na nuvem.
 name: iOS (App Store)
@@ -212,12 +213,12 @@ jobs:
         run: |
           D="$RUNNER_TEMP/asc"; mkdir -p "$D"; chmod 700 "$D"
           if printf '%s' "$ASC_KEY_P8_B64" | grep -q "BEGIN PRIVATE KEY"; then
-            printf '%s\n' "$ASC_KEY_P8_B64" > "$D/AuthKey.p8"   # colado como texto do .p8 (também vale)
+            printf '%s\n' "$ASC_KEY_P8_B64" | tr -d '\r' > "$D/AuthKey.p8"   # colado como texto do .p8 (sem os \r do Windows)
           else
             printf '%s' "$ASC_KEY_P8_B64" | tr -d '\n\r ' | base64 --decode > "$D/AuthKey.p8"
           fi
           if ! grep -q "BEGIN PRIVATE KEY" "$D/AuthKey.p8"; then
-            echo "::error::O segredo ASC_KEY_P8_B64 não é o arquivo .p8 em base64 (veja lojas/apple/GUIA_APPLE.md)."
+            echo "::error::O segredo ASC_KEY_P8_B64 não é a chave .p8: cole o texto do arquivo, de BEGIN PRIVATE KEY até END PRIVATE KEY, ou o arquivo em base64 (veja lojas/apple/GUIA_APPLE.md)."
             exit 1
           fi
           echo "ASC_KEY_PATH=$D/AuthKey.p8" >> "$GITHUB_ENV"
