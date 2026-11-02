@@ -227,10 +227,12 @@ jobs:
           case "$VERSAO" in
             ''|*[!0-9.]*) echo "::error::Versão inválida: '$VERSAO' (use números e pontos, ex.: 1.0.1)."; exit 1 ;;
           esac
-          # número do build = número deste run do workflow (sempre maior que o do envio anterior)
+          # número do build = número deste run × 10 + tentativa: sempre maior que o do envio anterior, também num
+          # "Re-run" (que repete o número do run, mas não a tentativa)
+          BUILD=$(( ${{ github.run_number }} * 10 + ${{ github.run_attempt }} ))
           echo "VERSAO=$VERSAO" >> "$GITHUB_ENV"
-          echo "BUILD=${{ github.run_number }}" >> "$GITHUB_ENV"
-          echo "Versão $VERSAO, build ${{ github.run_number }}"
+          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
+          echo "Versão $VERSAO, build $BUILD"
 
       - name: Arquivar (Release; a assinatura é feita no envio)
         working-directory: ios
