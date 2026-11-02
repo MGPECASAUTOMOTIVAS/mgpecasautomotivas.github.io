@@ -46,7 +46,9 @@ env:
 jobs:
   verificar:
     name: Compilar para o simulador e testar (sem assinatura)
-    runs-on: macos-26
+    # macOS 26 em processador Intel: os runners macOS com chip Apple (macos-26) estavam sem vaga (o job esperou 15 min
+    # e foi cancelado pelo GitHub). O Intel compila o mesmo app, com o mesmo Xcode 26.
+    runs-on: macos-26-intel
     timeout-minutes: 45
     steps:
       - name: Baixar o repositório
@@ -143,7 +145,7 @@ jobs:
     name: Arquivar, assinar e enviar ao App Store Connect (TestFlight)
     if: github.event_name == 'workflow_dispatch'
     needs: verificar
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 60
     steps:
       - name: Conferir os segredos

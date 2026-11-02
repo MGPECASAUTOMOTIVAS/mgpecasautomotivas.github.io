@@ -32,11 +32,11 @@ final class WebViewController: UIViewController {
         configuracao.limitsNavigationsToAppBoundDomains = true
         configuracao.websiteDataStore = .default()
         configuracao.dataDetectorTypes = []
-        // identificação do navegador: a padrão do iPhone ("... Mobile/15E148") + a marca do app da loja
-        let nomePadrao = WKWebViewConfiguration().applicationNameForUserAgent ?? ""
-        configuracao.applicationNameForUserAgent = [nomePadrao, "MGCatalogoApp-iOS"]
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
+        // identificação do navegador: a padrão do iPhone ("Mozilla/5.0 (iPhone; ...) ... Mobile/15E148") + a marca do
+        // app da loja no fim: "... Mobile/15E148 MGCatalogoApp-iOS"
+        let padrao = WKWebViewConfiguration().applicationNameForUserAgent ?? ""
+        let nomePadrao = padrao.contains("Mobile") ? padrao : "Mobile/15E148"
+        configuracao.applicationNameForUserAgent = nomePadrao + " MGCatalogoApp-iOS"
 
         let conteudo = WKUserContentController()
         // marca do app da loja para a página (esconde os convites para "instalar o app")

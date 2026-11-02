@@ -37,7 +37,9 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIStatusBarStyle: UIStatusBarStyleLightContent
         UIViewControllerBasedStatusBarAppearance: true
-        # tela de abertura: fundo azul do app (escuro no modo escuro) com o logo num chip branco (Assets.xcassets)
+        # sempre no tema claro (o catálogo também abre claro; o escuro é escolhido dentro dele, no botão da lua)
+        UIUserInterfaceStyle: Light
+        # tela de abertura: fundo azul MG com o logo num chip branco (Assets.xcassets), só a versão clara
         UILaunchScreen:
           UIColorName: FundoAbertura
           UIImageName: LogoAbertura
