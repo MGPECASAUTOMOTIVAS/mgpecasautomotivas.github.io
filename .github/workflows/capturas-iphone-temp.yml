@@ -24,10 +24,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - pasta: iphone-6.9-1320x2868
-            aparelhos: 'iPhone 17 Pro Max|iPhone 16 Pro Max'
-          - pasta: iphone-6.5-1242x2688
-            aparelhos: 'iPhone 11 Pro Max|iPhone XS Max'
+          # 2ª rodada: só a tela 04 do 6,3" (na 1ª rodada, run 41539580548, ela saiu em branco); as outras 14 ficaram boas
           - pasta: iphone-6.3-1206x2622
             aparelhos: 'iPhone 17 Pro|iPhone 17|iPhone 16 Pro'
     env:
@@ -104,16 +101,10 @@ jobs:
             echo "$1: $(sips -g pixelWidth -g pixelHeight "$SAIDA/$1.png" | awk '/pixel/ {printf "%s ", $2}')"
           }
           # 1ª abertura: baixa o catálogo e liga o service worker (não é capturada)
-          abrir 50
-          abrir 25; foto 01-inicio
-          abrir 25 -mgEndereco "${B}#/peca/MG001"; foto 03-ficha-da-peca
-          abrir 35 -mgEndereco "${B}#/veiculo/Volkswagen/Gol/2010?motor=1.6"; foto 04-pecas-do-veiculo
-          abrir 25 -mgLista "$LISTA_B64" -mgEndereco "${B}#/lista"; foto 05-minha-lista
-          # tema escuro escolhido pela pessoa (mg-tema = 'dark'), num app instalado de novo (sem a lista)
-          xcrun simctl uninstall "$UDID" "$BUNDLE_ID"
-          xcrun simctl install "$UDID" "$APP"
-          abrir 50 -mgTema dark
-          abrir 25 -mgTema dark; foto 02-inicio-escuro
+          abrir 60
+          # peças do VW Gol 2010 1.6: duas tentativas com mais tempo (fica a que mostrar a tela pronta)
+          abrir 60 -mgEndereco "${B}#/veiculo/Volkswagen/Gol/2010?motor=1.6"; foto 04-pecas-do-veiculo
+          abrir 75 -mgEndereco "${B}#/veiculo/Volkswagen/Gol/2010?motor=1.6"; foto 04b-pecas-do-veiculo
           echo "SAIDA=$SAIDA" >> "$GITHUB_ENV"
 
       - name: Pôr as capturas no log (PNG em base64)
