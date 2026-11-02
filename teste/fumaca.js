@@ -418,7 +418,7 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await page.evaluate(function () { localStorage.setItem('mg-lista', JSON.stringify([{ codigo: 'MG001', qtd: 2, adicionadoEm: '2026-11-02T15:00:00.000Z' }, { codigo: 'MG076', qtd: 1, adicionadoEm: '2026-11-02T15:01:00.000Z' }, { codigo: 'MG1903', qtd: 4, adicionadoEm: '2026-11-02T15:02:00.000Z' }])); window.__imprimiu = 0; });
   await ir(page, '#/lista', '.lista-acoes .btn-imprimir');
   var btnImp = await page.evaluate(function () { var b = document.querySelector('#conteudo .lista-acoes .btn-imprimir'), r = b.getBoundingClientRect(); return { h: r.height, w: r.width, txt: b.textContent.trim(), svg: !!b.querySelector('svg'), tipo: b.type, folha: !!document.getElementById('impressao'), irmaos: b.parentNode.querySelectorAll('.btn').length }; });
-  ok(btnImp.h >= 44 && btnImp.w >= 44 && btnImp.txt === 'Imprimir / PDF' && btnImp.svg && btnImp.tipo === 'button' && btnImp.irmaos === 4 && !btnImp.folha, 'Minha lista: botão "Imprimir / PDF" com ícone e 44 px junto de WhatsApp/Copiar/Etiquetas; sem folha antes do toque');
+  ok(btnImp.h >= 44 && btnImp.w >= 44 && btnImp.txt === 'Imprimir / PDF' && btnImp.svg && btnImp.tipo === 'button' && (btnImp.irmaos === 3 || btnImp.irmaos === 4) && !btnImp.folha, 'Minha lista: botão "Imprimir / PDF" com ícone e 44 px junto de WhatsApp/Copiar; sem folha antes do toque');
   function lerFolha() {
     return page.evaluate(function () {
       var s = document.getElementById('impressao'); if (!s) return null;
@@ -494,7 +494,20 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   ok(ctrlP && await page.evaluate(function () { return !document.getElementById('impressao') && !document.body.classList.contains('imprimindo'); }), 'Ctrl+P: beforeprint monta a folha da tela e afterprint tira');
   await page.evaluate(function () { localStorage.removeItem('mg-lista'); });
 
-  /* ---------- etiquetas com QR para a prateleira (#/etiquetas): modelos, prévia, quantidade, medidas em mm, QR, folha de impressão ---------- */
+  /* ---------- etiquetas com QR para a prateleira (#/etiquetas): desligadas por config.js (etiquetas: false); o bloco roda só com a opção ligada ---------- */
+  var ETIQUETAS = /etiquetas:\s*true/.test(fs.readFileSync(path.join(APP, 'config.js'), 'utf8'));
+  if (!ETIQUETAS) {
+    console.log('\nEtiquetas com QR (#/etiquetas): desligadas');
+    await page.evaluate(function () { localStorage.setItem('mg-lista', JSON.stringify([{ codigo: 'MG001', qtd: 2 }])); });
+    await ir(page, '#/lista', '.lista-acoes');
+    ok(!(await page.$('#conteudo .btn-etiquetas')), 'Minha lista sem o botão Etiquetas (config etiquetas: false)');
+    await ir(page, '#/peca/MG001', '.acoes-peca');
+    ok(!(await page.$('#conteudo .link-etiqueta')), 'ficha sem o link Etiqueta desta peça');
+    await page.goto(base + '#/etiquetas'); await page.waitForTimeout(400);
+    ok(/#\/lista$/.test(page.url()), '#/etiquetas manda para #/lista');
+    await page.evaluate(function () { localStorage.removeItem('mg-lista'); });
+  }
+  if (ETIQUETAS) {
   console.log('\nEtiquetas com QR (#/etiquetas)');
   var appJs = fs.readFileSync(path.join(APP, 'app.js'), 'utf8'), appCss = fs.readFileSync(path.join(APP, 'app.css'), 'utf8');
   ok(/id: 'a4360'[^\n]*w: 63\.5, h: 38\.1, col: 3, lin: 7, mt: 15\.2, ml: 7\.2, gh: 2\.55/.test(appJs) && /id: 'a4362'[^\n]*w: 99, h: 33\.9, col: 2, lin: 8, mt: 12\.9, ml: 4\.7, gh: 2\.6/.test(appJs) && /id: 'a4356'[^\n]*w: 63\.5, h: 25\.4, col: 3, lin: 11, mt: 8\.8, ml: 7\.2/.test(appJs) && /id: 'a4351'[^\n]*w: 38\.2, h: 21\.2, col: 5, lin: 13, mt: 10\.7, ml: 4\.5, gh: 2\.5/.test(appJs) && /id: 'grade38'[^\n]*w: 63, h: 33, col: 3, lin: 8/.test(appJs) && /pimaco\.com\.br/.test(appJs), 'app.js: 4 modelos Pimaco A4 (A4360, A4362, A4356, A4351) com medidas, contagem e margens em mm, mais a grade 3 × 8, e a fonte citada no comentário');
@@ -581,6 +594,7 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await page.evaluate(function () { localStorage.removeItem('mg-lista'); localStorage.removeItem('mg-etiqueta-modelo'); });
   await ir(page, '#/etiquetas', '.vazio');
   ok(/Lista vazia/.test(await page.textContent('#conteudo .vazio')) && !!(await page.$('#conteudo .vazio a.btn')), 'lista vazia: estado vazio explica como adicionar peças, com "Buscar peça"');
+  }
 
   console.log('\nLinhas, Instalar, Sobre');
   await ir(page, '#/linhas', '.grade-linhas .linha-card');
@@ -643,7 +657,7 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   console.log('\nLargura 360');
   var p360 = await ctx.newPage(); colher(p360, erros); await p360.setViewportSize({ width: 360, height: 740 });
   await page.evaluate(function () { localStorage.setItem('mg-lista', JSON.stringify([{ codigo: 'MG001', qtd: 2, adicionadoEm: '2026-11-02T15:00:00.000Z' }, { codigo: 'MG076', qtd: 1, adicionadoEm: '2026-11-02T15:01:00.000Z' }])); }); /* lista com itens para as telas 360 e paisagem */
-  var telas = [['#/', '.secao-busca .entrada'], ['#/busca?q=mangueira%20gol', '.painel-res .res-cont b'], ['#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.painel-res .res-cont b'], ['#/peca/MG001', 'table.tabela'], ['#/lista', '.lista-item'], ['#/etiquetas', '.etq-folha-previa .etq'], ['#/instalar', '.qr-caixa svg'], ['#/sobre', '.versao b']];
+  var telas = [['#/', '.secao-busca .entrada'], ['#/busca?q=mangueira%20gol', '.painel-res .res-cont b'], ['#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.painel-res .res-cont b'], ['#/peca/MG001', 'table.tabela'], ['#/lista', '.lista-item'], ['#/instalar', '.qr-caixa svg'], ['#/sobre', '.versao b']];
   await p360.goto(base + '#/'); await p360.waitForSelector('.secao-busca .entrada');
   for (var k = 0; k < telas.length; k++) {
     if (k) await ir(p360, telas[k][0], telas[k][1]);

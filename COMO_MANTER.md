@@ -20,7 +20,7 @@ Guia curto para o Filipe. Tudo o que está aqui foi testado em 02/11/2026.
   linha; ficha: foto, aplicação completa e números originais; veículo: código, nome, linha e aplicação de todas as peças, na
   ordem e com o filtro da tela) e um QR code do link. Sem valores nem contato. Ctrl+P no computador imprime a mesma folha.
   Tudo é montado no aparelho (CSS `@media print` em `app.css`, seção `#impressao` em `app.js`); nada vai para servidor.
-- **Etiquetas com QR para a prateleira** (botão "Etiquetas" na Minha lista, tela `#/etiquetas`; na ficha, o link "Etiqueta
+- **Etiquetas com QR para a prateleira** — DESLIGADAS desde 02/11 (config.js `etiquetas: false`; o Filipe quer conversar antes, porque a MG já tem etiquetas padrão; o código fica guardado e volta com `etiquetas: true`) (botão "Etiquetas" na Minha lista, tela `#/etiquetas`; na ficha, o link "Etiqueta
   desta peça"): folha A4 de etiquetas adesivas com o logo, o código MG em destaque, o nome, a linha e um QR code que abre a
   ficha da peça no app (`p/MG001.html`). Modelos: Pimaco A4360 (63,5 × 38,1 mm, 21 por folha), A4362 (99 × 33,9 mm, 16),
   A4356 (63,5 × 25,4 mm, 33), A4351 (38,2 × 21,2 mm, 65) e "Grade simples 3 × 8" (63 × 33 mm com linha de corte, para papel

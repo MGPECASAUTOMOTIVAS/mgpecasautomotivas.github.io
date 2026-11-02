@@ -8,6 +8,7 @@
    placaUrl: Worker da consulta de placa (precisa liberar a origem do app no CORS; ver LEIA-ME.md).
    loja: site da MG; páginas de produto em loja + '/produtos/<handle>/'.
    urlApp: endereço público do app, usado nos links de "Compartilhar" (vazio = usa o endereço atual).
+   etiquetas: false mantém a tela de etiquetas com QR desligada (código guardado; decisão do Filipe em 02/11).
    mlMarcaId: filtro de marca do Mercado Livre (_BRAND_<id>); vazio = sem filtro. Conferir com o botão do site. */
 self.MG_CONFIG = {
   dadosBase: 'dados/',
@@ -17,5 +18,6 @@ self.MG_CONFIG = {
   urlApp: 'https://mgpecasautomotivas.github.io/',
   mlSufixo: 'MG Mangueiras - MG Peças Automotivas',
   mlMarcaId: '64522',
-  versao: '2026.11.02-29'
+  etiquetas: false,
+  versao: '2026.11.02-30'
 };

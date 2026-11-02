@@ -2062,7 +2062,7 @@
       var acoesPeca = el('div', { class: 'linha-btn acoes-peca' }, [btnFav, btnComp, btnLista, botaoImprimir('btn-acao')]);
       /* etiqueta com QR para a prateleira: link discreto abaixo das ações (a grade de 4 botões fica como está) */
       var linkEtq = el('a', { class: 'link-acao link-etiqueta', href: '#/etiquetas?peca=' + encodeURIComponent(p[0]) }, [svg(ICONES.etiqueta), 'Etiqueta desta peça']);
-      var cab = el('section', {}, [el('div', { class: 'detalhe-cod', text: p[0] }), el('div', { class: 'detalhe-nome', text: p[1] }), meta, d.e ? el('p', { class: 'ajuda', text: 'Embalagem: ' + d.e }) : null, acoesPeca, linkEtq]);
+      var cab = el('section', {}, [el('div', { class: 'detalhe-cod', text: p[0] }), el('div', { class: 'detalhe-nome', text: p[1] }), meta, d.e ? el('p', { class: 'ajuda', text: 'Embalagem: ' + d.e }) : null, acoesPeca, CFG.etiquetas ? linkEtq : null]);
       var apl;
       if (d.a && d.a.length) {
         var tb = el('table', { class: 'tabela' }, [el('thead', {}, [el('tr', {}, [el('th', { text: 'Veículo' }), el('th', { text: 'Motor' }), el('th', { text: 'Anos' })])])]);
@@ -2271,7 +2271,7 @@
       l.forEach(function (x) { ul.appendChild(itemLista(x, atualizar, remover)); });
       res.appendChild(el('div', { class: 'res-cab' }, [el('h2', { class: 'visualmente-oculto', text: 'Peças da lista' }), cont]));
       var btnEtq = el('a', { class: 'btn btn-neutro btn-etiquetas', href: '#/etiquetas', title: 'Etiquetas com QR code para a prateleira' }, [svg(ICONES.etiqueta), 'Etiquetas']);
-      res.appendChild(el('div', { class: 'cartao lista-acoes' }, [el('div', { class: 'linha-btn' }, [btnZap, btnCopiar, btnComp, botaoImprimir(), btnEtq]), el('p', { class: 'ajuda', text: 'O texto traz só o código MG, o nome e a quantidade, sem valores. A lista fica guardada só neste aparelho. Imprimir / PDF gera uma folha com a lista; Etiquetas monta uma folha A4 de etiquetas com QR code para a prateleira.' })]));
+      res.appendChild(el('div', { class: 'cartao lista-acoes' }, [el('div', { class: 'linha-btn' }, [btnZap, btnCopiar, btnComp, botaoImprimir(), CFG.etiquetas ? btnEtq : null]), el('p', { class: 'ajuda', text: 'O texto traz só o código MG, o nome e a quantidade, sem valores. A lista fica guardada só neste aparelho. Imprimir / PDF gera uma folha com a lista.' + (CFG.etiquetas ? ' Etiquetas monta uma folha A4 de etiquetas com QR code para a prateleira.' : '') })]));
       /* folha "Lista de peças MG": quantidade, código, nome e linha de cada peça; QR do app */
       folhaProvedor = function () {
         var lv = listaValida();
@@ -2534,7 +2534,7 @@
       case 'lista': telaLista(); break;
       case 'sobre': telaSobre(); break;
       case 'instalar': telaInstalar(); break;
-      case 'etiquetas': telaEtiquetas(r.q); break;
+      case 'etiquetas': if (CFG.etiquetas) { telaEtiquetas(r.q); } else { location.replace('#/lista'); } break;
       /* endereço desconhecido (link antigo ou digitado errado): avisa e volta ao Início */
       default: toast('Endereço não encontrado'); location.hash = '#/';
     }
