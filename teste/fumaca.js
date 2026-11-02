@@ -54,6 +54,7 @@ async function ir(page, hash, seletor) {
   await page.evaluate(function (h) { var t = document.getElementById('conteudo'); if (t.firstElementChild) t.firstElementChild.setAttribute('data-velho', '1'); location.hash = h; }, hash);
   return page.waitForSelector('#conteudo > :not([data-velho]) ' + seletor, { timeout: 15000 });
 }
+function document_tem(html, classe) { return html.indexOf(classe) >= 0; }
 async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(250); /* fim da animação de entrada da tela */ await page.screenshot({ path: path.join(capturas, nome + '.png'), fullPage: false }); } }
 
 (async function () {
@@ -154,7 +155,8 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await page.fill('.secao-busca .entrada', 'mg0');
   var xDigitado = await page.evaluate(function () { return !document.querySelector('.secao-busca .limpar').hidden; });
   await page.focus('.secao-busca .entrada'); await page.keyboard.press('Tab');
-  ok(await page.evaluate(function () { return document.activeElement.classList.contains('btn-buscar'); }), 'teclado: Tab do campo vai direto ao botão Buscar (o × fica fora do Tab)');
+  if (await page.evaluate(function () { return document.activeElement.classList.contains('btn-voz'); })) await page.keyboard.press('Tab'); /* com busca por voz, o microfone vem antes do Buscar */
+  ok(await page.evaluate(function () { return document.activeElement.classList.contains('btn-buscar'); }), 'teclado: Tab do campo vai ao botão Buscar, passando só pelo microfone quando ele existe (o × fica fora do Tab)');
   await page.click('.secao-busca .limpar');
   var xLimpo = await page.evaluate(function () { return { valor: document.querySelector('.secao-busca .entrada').value, foco: document.activeElement === document.querySelector('.secao-busca .entrada'), hash: location.hash, escondido: document.querySelector('.secao-busca .limpar').hidden }; });
   ok(xInicio.nativo === 'none' && xInicio.limparVazio && xDigitado && xLimpo.valor === '' && xLimpo.foco && xLimpo.hash === '#/' && xLimpo.escondido, 'campo do Início: × nativo escondido, × do app só com texto, limpar esvazia e mantém o foco na mesma tela');
@@ -244,8 +246,8 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   var cartaoVeic = await page.$('#conteudo .cartao-veic');
   ok(cartaoVeic, 'cartão "Ver peças para Volkswagen Gol" acima dos resultados');
   igual(await page.textContent('#conteudo .topo-sub, .topo .topo-sub'), '“mangueria radiador gol”', 'termo no topo');
-  var xRes = await page.evaluate(function () { var i = document.querySelector('#conteudo .busca-linha .entrada'); return { nativo: getComputedStyle(i, '::-webkit-search-cancel-button').webkitAppearance, limpar: document.querySelectorAll('#conteudo .busca-linha .limpar:not([hidden])').length, pad: getComputedStyle(i).paddingRight }; });
-  ok(xRes.nativo === 'none' && xRes.limpar === 1 && xRes.pad === '48px', 'resultados: um × só no campo (o nativo escondido), com espaço para ele');
+  var xRes = await page.evaluate(function () { var i = document.querySelector('#conteudo .busca-linha .entrada'); return { nativo: getComputedStyle(i, '::-webkit-search-cancel-button').webkitAppearance, limpar: document.querySelectorAll('#conteudo .busca-linha .limpar:not([hidden])').length, pad: getComputedStyle(i).paddingRight, voz: !!document.querySelector('#conteudo .busca-linha .btn-voz') }; });
+  ok(xRes.nativo === 'none' && xRes.limpar === 1 && xRes.pad === (xRes.voz ? '92px' : '48px'), 'resultados: um × só no campo (o nativo escondido), com espaço para ele' + (xRes.voz ? ' e para o microfone' : ''));
   /* voltar da ficha para a lista: a lista reabre na mesma posição */
   await page.evaluate(function () { document.querySelectorAll('#conteudo .lista .item')[3].scrollIntoView({ block: 'center' }); }); await page.waitForTimeout(150);
   var yLista = await page.evaluate(function () { return window.scrollY; });
@@ -352,7 +354,9 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await ir(page, '#/lista', '.lista-item');
   igual((await page.$$('#conteudo .lista-item')).length, 2, 'lista com 2 peças');
   igual(await page.textContent('#conteudo .lista-cont'), '2 peças · 3 unidades neste aparelho', 'total de peças e unidades');
-  var itemInfo = await page.evaluate(function () { var li = document.querySelector('#conteudo .lista-item'), b = li.querySelectorAll('.qtd-btn'); function r(e) { var x = e.getBoundingClientRect(); return x.width >= 44 && x.height >= 44; } return { cod: li.querySelector('.item-cod').textContent, linha: li.querySelector('.item-apl').textContent, foto: !!li.querySelector('.foto'), val: li.querySelector('.qtd-num').value, toque: r(b[0]) && r(b[1]) && r(li.querySelector('.qtd-num')) && r(li.querySelector('.item-remover')), remover: li.querySelector('.item-remover').getAttribute('aria-label') }; });
+  /* a lista é refeita quando detalhes.json chega; espera os controles do 1º cartão medirem 44 px (um cartão recém-trocado mede 0) */
+  await page.waitForFunction(function () { var li = document.querySelector('#conteudo .lista-item'); return li && Array.prototype.every.call(li.querySelectorAll('.qtd-btn, .qtd-num, .item-remover'), function (e) { var x = e.getBoundingClientRect(); return x.width >= 44 && x.height >= 44; }); }, null, { timeout: 5000 }).catch(function () {});
+  var itemInfo = await page.evaluate(function () { var li = document.querySelector('#conteudo .lista-item'), b = li.querySelectorAll('.qtd-btn'); function r(e) { var x = e.getBoundingClientRect(); return Math.round(x.width) + '×' + Math.round(x.height); } var tam = [b[0], b[1], li.querySelector('.qtd-num'), li.querySelector('.item-remover')].map(r); return { cod: li.querySelector('.item-cod').textContent, linha: li.querySelector('.item-apl').textContent, foto: !!li.querySelector('.foto'), val: li.querySelector('.qtd-num').value, toque: tam.every(function (t) { return t.split('×').every(function (n) { return +n >= 44; }); }), tam: tam, remover: li.querySelector('.item-remover').getAttribute('aria-label') }; });
   ok(itemInfo.cod === 'MG001' && itemInfo.linha === 'Mangueiras do Filtro de Ar' && itemInfo.foto && itemInfo.val === '2' && itemInfo.toque && itemInfo.remover === 'Remover MG001 da lista', 'cartão com miniatura, código, nome, linha, quantidade 2 e controles de 44 px (' + JSON.stringify(itemInfo) + ')');
   await page.click('#conteudo .lista-item >> nth=0 >> .qtd-btn >> nth=1');
   igual(await page.inputValue('#conteudo .lista-item >> nth=0 >> .qtd-num'), '3', '"+" na lista: 3');
@@ -697,6 +701,150 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   ok(emPe[1] >= emPe[0] + 12, 'em pé a foto continua acima do código (' + emPe.join(' → ') + ')');
   await p360.evaluate(function () { localStorage.removeItem('mg-lista'); });
   await ctx.close();
+
+  /* ---------- busca por voz (Web Speech API simulada) ----------
+     O Chromium do teste expõe SpeechRecognition/webkitSpeechRecognition; aqui entra um dublê (addInitScript) que o app usa
+     como se fosse o navegador: o teste manda resultados parciais e finais, erros e o fim, e confere o que o app faz. */
+  console.log('\nBusca por voz');
+  function dubleVoz() {
+    window.__voz = { instancias: [], iniciou: 0, abortou: 0 };
+    function Dublê() { this.ativo = false; this.lang = ''; this.interimResults = false; this.maxAlternatives = 1; window.__voz.instancias.push(this); window.__voz.ultima = this; }
+    Dublê.prototype.start = function () { this.ativo = true; window.__voz.iniciou++; window.__voz.config = { lang: this.lang, interimResults: this.interimResults, maxAlternatives: this.maxAlternatives }; if (this.onstart) this.onstart(); };
+    Dublê.prototype.stop = function () { var s = this; if (!s.ativo) return; s.ativo = false; setTimeout(function () { if (s.onend) s.onend(); }, 0); };
+    Dublê.prototype.abort = function () { var s = this; if (!s.ativo) return; s.ativo = false; window.__voz.abortou++; setTimeout(function () { if (s.onerror) s.onerror({ error: 'aborted' }); if (s.onend) s.onend(); }, 0); };
+    /* resultado(texto, final): como o Chrome, results[i] é uma lista de alternativas com isFinal; o final encerra em seguida */
+    window.__voz.resultado = function (texto, final) { var s = window.__voz.ultima, r = [{ transcript: texto, confidence: .9 }]; r.isFinal = !!final; s.onresult({ resultIndex: 0, results: [r] }); if (final) { s.ativo = false; setTimeout(function () { if (s.onend) s.onend(); }, 0); } };
+    window.__voz.erro = function (c) { var s = window.__voz.ultima; s.ativo = false; if (s.onerror) s.onerror({ error: c }); if (s.onend) s.onend(); };
+    window.__voz.fim = function () { var s = window.__voz.ultima; s.ativo = false; if (s.onend) s.onend(); };
+    window.SpeechRecognition = Dublê; try { delete window.webkitSpeechRecognition; } catch (e) {}
+  }
+  var ctxVoz = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', locale: 'pt-BR' });
+  await rotas(ctxVoz); await ctxVoz.addInitScript(dubleVoz);
+  var pv = await ctxVoz.newPage(), errosVoz = []; colher(pv, errosVoz);
+  await pv.goto(base + '#/'); await pv.waitForSelector('.secao-busca .btn-voz', { timeout: 10000 });
+  function medirLinha(pg) {
+    return pg.evaluate(function () {
+      var l = document.querySelector('#conteudo .busca-linha'), lb = l.getBoundingClientRect(), i = l.querySelector('.entrada'), cs = getComputedStyle(i), v = l.querySelector('.btn-voz'), vb = v && v.getBoundingClientRect(), b = l.querySelector('.btn-buscar').getBoundingClientRect(), x = l.querySelector('.limpar'), xb = x && !x.hidden ? x.getBoundingClientRect() : null;
+      return { linha: Math.round(lb.height), btn: [Math.round(b.width), Math.round(b.height)], voz: vb ? [Math.round(vb.width), Math.round(vb.height), Math.round(vb.top - lb.top), Math.round(vb.bottom - lb.bottom)] : null, dentro: vb ? vb.right <= i.getBoundingClientRect().right && vb.left >= i.getBoundingClientRect().left : null,
+        util: Math.round(i.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)), padDir: Math.round(parseFloat(cs.paddingRight)), xSemSobrepor: xb && vb ? xb.right <= vb.left + 1 : null, largura: document.documentElement.scrollWidth + '/' + document.documentElement.clientWidth, placeholder: i.placeholder, ouvindo: l.classList.contains('ouvindo'), pressed: v && v.getAttribute('aria-pressed'), rotulo: v && v.getAttribute('aria-label') };
+    });
+  }
+  var mv = await medirLinha(pv);
+  ok(mv.voz && mv.voz[0] === 44 && mv.voz[1] === 44 && mv.dentro && mv.voz[2] >= 0 && mv.voz[3] <= 0, 'Início: botão do microfone de 44×44 px dentro do campo (' + JSON.stringify(mv.voz) + ')');
+  ok(mv.linha === 56 && mv.btn[0] >= 44 && mv.btn[1] >= 44, 'a linha do campo continua com 56 px e o botão de busca com 44 px ou mais (' + mv.linha + ' / ' + mv.btn.join('×') + ')');
+  /* "Código, nº original ou nome" em Barlow 500 16px mede 189 px (medido com a fonte do Google); o teste não baixa a fonte, então confere a largura útil do campo */
+  ok(mv.util >= 189 && mv.padDir === 48, 'placeholder inteiro ao lado do microfone em 390 (largura útil ' + mv.util + ' px, mínimo 189)');
+  ok(mv.rotulo === 'Buscar por voz' && mv.pressed === 'false' && !mv.ouvindo, 'botão "Buscar por voz" em repouso');
+  /* 1ª vez: aviso de privacidade com "Agora não" e "Entendi, usar"; nada é iniciado antes de aceitar */
+  await pv.click('.secao-busca .btn-voz');
+  var aviso1 = await pv.evaluate(function () { var a = document.querySelector('#conteudo .voz-aviso'); return { visivel: a && !a.hidden, texto: a && a.textContent, botoes: a ? Array.prototype.map.call(a.querySelectorAll('button'), function (b) { return b.textContent + '|' + b.getBoundingClientRect().height; }) : [], iniciou: window.__voz.iniciou, foco: document.activeElement.tagName + '.' + document.activeElement.className, guardado: localStorage.getItem('mg-voz-aviso') }; });
+  ok(aviso1.visivel && /serviço de reconhecimento de fala do navegador/.test(aviso1.texto) && /Google/.test(aviso1.texto) && /não guarda/.test(aviso1.texto), 'no 1º toque aparece o aviso: áudio processado pelo serviço do navegador (Google no Chrome), não guardado pelo app');
+  ok(aviso1.botoes.length === 2 && aviso1.botoes.every(function (b) { return parseFloat(b.split('|')[1]) >= 44; }) && /^Agora não/.test(aviso1.botoes[0]) && /^Entendi, usar/.test(aviso1.botoes[1]) && aviso1.iniciou === 0 && !aviso1.guardado, 'botões "Agora não" e "Entendi, usar" (44 px), microfone ainda não ligado (' + aviso1.botoes.join(', ') + ')');
+  await capturar(pv, '12-voz-aviso');
+  await pv.click('.secao-busca .voz-aviso .btn-neutro');
+  var aviso2 = await pv.evaluate(function () { return { visivel: !document.querySelector('#conteudo .voz-aviso').hidden, iniciou: window.__voz.iniciou, guardado: localStorage.getItem('mg-voz-aviso'), foco: document.activeElement.className }; });
+  ok(!aviso2.visivel && aviso2.iniciou === 0 && !aviso2.guardado && aviso2.foco === 'btn-voz', '"Agora não" fecha o aviso sem ligar o microfone nem guardar nada; foco volta ao microfone');
+  await pv.click('.secao-busca .btn-voz');
+  ok(await pv.evaluate(function () { return !document.querySelector('#conteudo .voz-aviso').hidden; }), 'no toque seguinte o aviso volta (ainda não aceito)');
+  await pv.click('.secao-busca .voz-aviso .btn-primario');
+  var ouvindo1 = await pv.evaluate(function () { var l = document.querySelector('#conteudo .busca-linha'), e = document.querySelector('#conteudo .voz-estado'); return { guardado: localStorage.getItem('mg-voz-aviso'), iniciou: window.__voz.iniciou, config: window.__voz.config, ouvindo: l.classList.contains('ouvindo'), estado: e && !e.hidden ? e.textContent : '', live: e && e.getAttribute('aria-live'), placeholder: l.querySelector('.entrada').placeholder, pressed: l.querySelector('.btn-voz').getAttribute('aria-pressed'), rotulo: l.querySelector('.btn-voz').getAttribute('aria-label'), anel: getComputedStyle(l.querySelector('.btn-voz'), '::before').animationName, avisoSumiu: document.querySelector('#conteudo .voz-aviso').hidden }; });
+  ok(ouvindo1.guardado === 'ok' && ouvindo1.iniciou === 1 && ouvindo1.avisoSumiu, '"Entendi, usar" guarda a escolha (mg-voz-aviso) e liga o microfone');
+  ok(ouvindo1.config && ouvindo1.config.lang === 'pt-BR' && ouvindo1.config.interimResults === true && ouvindo1.config.maxAlternatives === 3, 'reconhecimento em pt-BR com resultados parciais e 3 alternativas (' + JSON.stringify(ouvindo1.config) + ')');
+  ok(ouvindo1.ouvindo && /^Ouvindo…/.test(ouvindo1.estado) && ouvindo1.live === 'polite' && ouvindo1.placeholder === 'Ouvindo…' && ouvindo1.pressed === 'true' && ouvindo1.rotulo === 'Parar de ouvir' && ouvindo1.anel === 'pulsar-voz', 'estado "Ouvindo…" (região viva, placeholder, botão pressionado "Parar de ouvir", anel animado)');
+  await pv.evaluate(function () { window.__voz.resultado('mangueira radiador gol', false); });
+  igual(await pv.inputValue('.secao-busca .entrada'), 'mangueira radiador gol', 'texto parcial aparece no campo enquanto fala');
+  await capturar(pv, '13-voz-ouvindo');
+  await pv.evaluate(function () { window.__voz.resultado('mangueira radiador gol dois mil e dez um ponto seis', true); });
+  await pv.waitForSelector('#conteudo .cartao-veic', { timeout: 15000 });
+  var resVoz = await pv.evaluate(function () { var c = document.querySelector('#conteudo .cartao-veic'); return { hash: location.hash, cartao: c.textContent.replace(/\s+/g, ' '), ouvindo: !!document.querySelector('#conteudo .busca-linha.ouvindo'), campo: document.querySelector('#conteudo .entrada').value }; });
+  ok(resVoz.hash === '#/busca?q=mangueira%20radiador%20gol%202010%201.6' && resVoz.campo === 'mangueira radiador gol 2010 1.6', 'texto final normalizado ("dois mil e dez um ponto seis" → 2010 1.6) e busca disparada (' + resVoz.hash + ')');
+  ok(/Gol 2010 1\.6/.test(resVoz.cartao) && !resVoz.ouvindo, 'resultados com o cartão "Ver peças para Volkswagen Gol 2010 1.6" e microfone em repouso (' + resVoz.cartao.slice(0, 60) + ')');
+  await pv.waitForSelector('.painel-res .res-cont b');
+  await capturar(pv, '14-voz-resultado');
+  /* na tela de resultados o campo tem texto: × e microfone lado a lado, sem sobrepor; o aviso não volta (escolha lembrada) */
+  var mr = await medirLinha(pv);
+  ok(mr.voz && mr.xSemSobrepor === true && mr.padDir === 92 && mr.linha === 56, 'resultados: × e microfone lado a lado dentro do campo, sem sobrepor (padding ' + mr.padDir + ' px)');
+  await pv.click('#conteudo .btn-voz');
+  var seg = await pv.evaluate(function () { return { aviso: document.querySelector('#conteudo .voz-aviso').hidden, iniciou: window.__voz.iniciou, ouvindo: !!document.querySelector('#conteudo .busca-linha.ouvindo'), x: document.querySelector('#conteudo .limpar').hidden }; });
+  ok(seg.aviso && seg.iniciou === 2 && seg.ouvindo && seg.x, 'com a escolha lembrada o microfone liga direto; o × some enquanto ouve');
+  /* toque de novo cancela: abort, sem toast, campo como antes */
+  await pv.click('#conteudo .btn-voz'); await pv.waitForTimeout(100);
+  var canc = await pv.evaluate(function () { return { abortou: window.__voz.abortou, ouvindo: !!document.querySelector('#conteudo .busca-linha.ouvindo'), toast: document.getElementById('toast').hidden, campo: document.querySelector('#conteudo .entrada').value, x: document.querySelector('#conteudo .limpar').hidden }; });
+  ok(canc.abortou === 1 && !canc.ouvindo && canc.toast && canc.campo === 'mangueira radiador gol 2010 1.6' && !canc.x, 'toque de novo cancela (abort) sem toast e o campo volta ao que era');
+  /* erros e vazio: toasts honestos, estado em repouso e foco de volta ao campo */
+  var casos = [['not-allowed', 'Microfone sem permissão'], ['no-speech', 'Não entendi, tente de novo'], ['network', 'Busca por voz precisa de internet'], ['', 'Não entendi, tente de novo']];
+  for (var cv = 0; cv < casos.length; cv++) {
+    await pv.click('#conteudo .btn-voz');
+    await pv.evaluate(function (c) { if (c) window.__voz.erro(c); else window.__voz.resultado('', true); }, casos[cv][0]);
+    await pv.waitForFunction(function () { return !document.getElementById('toast').hidden; }, null, { timeout: 3000 });
+    var ev = await pv.evaluate(function () { return { toast: document.getElementById('toast').textContent, ouvindo: !!document.querySelector('#conteudo .busca-linha.ouvindo'), foco: document.activeElement.className, hash: location.hash }; });
+    ok(ev.toast === casos[cv][1] && !ev.ouvindo && /entrada/.test(ev.foco) && ev.hash === '#/busca?q=mangueira%20radiador%20gol%202010%201.6', (casos[cv][0] || 'texto vazio') + ' → toast "' + ev.toast + '", repouso e foco no campo');
+    if (cv === 0) await capturar(pv, '15-voz-toast-permissao');
+    await pv.evaluate(function () { document.getElementById('toast').hidden = true; });
+  }
+  /* sem rede: nem tenta ligar */
+  await ctxVoz.setOffline(true); await pv.click('#conteudo .btn-voz');
+  await pv.waitForFunction(function () { return !document.getElementById('toast').hidden; }, null, { timeout: 3000 });
+  ok(await pv.evaluate(function () { return document.getElementById('toast').textContent === 'Busca por voz precisa de internet' && window.__voz.iniciou === 6; }), 'sem conexão: toast "Busca por voz precisa de internet" sem ligar o microfone');
+  await ctxVoz.setOffline(false); await pv.evaluate(function () { document.getElementById('toast').hidden = true; });
+  /* mais frases: números falados, "m g", código MG; cada final dispara uma busca nova a partir da tela de resultados */
+  var frases = [['m g zero zero um', 'MG001'], ['MG zero zero oito', 'MG008'], ['uno mille mil novecentos e noventa e oito um vírgula zero', 'uno mille 1998 1.0'], ['uma mangueira do corsa dois mil e seis', 'uma mangueira do corsa 2006'], ['mangueira e tubo', 'mangueira e tubo']];
+  for (var fv = 0; fv < frases.length; fv++) {
+    await pv.click('#conteudo .btn-voz');
+    await pv.evaluate(function (t) { window.__voz.resultado(t, true); }, frases[fv][0]);
+    await pv.waitForFunction(function (q) { return location.hash === '#/busca?q=' + encodeURIComponent(q); }, frases[fv][1], { timeout: 5000 }).catch(function () {});
+    igual(decodeURIComponent((await pv.evaluate(function () { return location.hash; })).replace('#/busca?q=', '')), frases[fv][1], 'fala "' + frases[fv][0] + '" → busca');
+    await pv.waitForSelector('.painel-res .res-cont b, #conteudo .vazio', { timeout: 15000 });
+  }
+  /* trocar de tela enquanto ouve cancela em silêncio: o resultado que chega depois não abre busca na tela nova */
+  await pv.click('#conteudo .btn-voz');
+  await ir(pv, '#/linhas', '.grade-linhas');
+  await pv.waitForTimeout(50);
+  await pv.evaluate(function () { window.__voz.resultado('mangueira radiador gol', true); }); await pv.waitForTimeout(300);
+  var trocou = await pv.evaluate(function () { return { hash: location.hash, toast: document.getElementById('toast').hidden }; });
+  ok(trocou.hash === '#/linhas' && trocou.toast, 'trocar de tela enquanto ouve cancela sem toast; resultado atrasado não abre busca (' + trocou.hash + ')');
+  /* escuro, 360, paisagem e computador com teclado */
+  await pv.emulateMedia({ colorScheme: 'dark' });
+  await ir(pv, '#/', '.secao-busca .btn-voz'); await pv.click('.secao-busca .btn-voz');
+  var corEscuro = await pv.evaluate(function () { var b = document.querySelector('#conteudo .btn-voz'); return [getComputedStyle(b).color, getComputedStyle(document.querySelector('#conteudo .entrada')).borderColor, !!document.querySelector('#conteudo .busca-linha.ouvindo')]; });
+  ok(corEscuro[2] && corEscuro[0] === corEscuro[1] && corEscuro[0] === 'rgb(79, 147, 238)', 'escuro: microfone e borda do campo na cor da MG enquanto ouve (' + corEscuro[0] + ')');
+  await capturar(pv, '16-voz-ouvindo-escuro');
+  await pv.click('.secao-busca .btn-voz'); await pv.waitForTimeout(100); await pv.emulateMedia({ colorScheme: 'light' });
+  await pv.setViewportSize({ width: 360, height: 740 }); await ir(pv, '#/busca', '.btn-voz'); await ir(pv, '#/', '.secao-busca .btn-voz');
+  var m360 = await medirLinha(pv), ph360 = await pv.evaluate(function () { var i = document.querySelector('#conteudo .entrada'), c = document.createElement('canvas').getContext('2d'); c.font = getComputedStyle(i, '::placeholder').font; return Math.round(c.measureText(i.placeholder).width); });
+  ok(m360.linha === 56 && m360.voz[0] === 44 && m360.btn[0] >= 44 && m360.largura === '360/360' && m360.util >= ph360, '360: linha 56 px, microfone 44 px, botão de busca ≥ 44 px, sem rolagem horizontal e placeholder inteiro (' + ph360 + ' ≤ ' + m360.util + ' px)');
+  await pv.setViewportSize({ width: 844, height: 390 }); await pv.waitForTimeout(100);
+  var m844 = await medirLinha(pv);
+  ok(m844.linha === 56 && m844.voz[0] === 44 && m844.largura === '844/844', 'paisagem 844×390: linha 56 px com o microfone, sem rolagem horizontal');
+  await pv.setViewportSize({ width: 1366, height: 768 }); await ir(pv, '#/busca', '.btn-voz'); await ir(pv, '#/', '.secao-busca .btn-voz');
+  await pv.focus('.secao-busca .entrada'); await pv.keyboard.press('Tab');
+  var tab1 = await pv.evaluate(function () { return document.activeElement.className; });
+  await pv.keyboard.press('Enter');
+  var tab2 = await pv.evaluate(function () { return { ouvindo: !!document.querySelector('#conteudo .busca-linha.ouvindo'), largura: document.documentElement.scrollWidth + '/' + document.documentElement.clientWidth }; });
+  await pv.keyboard.press('Tab');
+  var tab3 = await pv.evaluate(function () { return document.activeElement.className; });
+  ok(tab1 === 'btn-voz' && tab2.ouvindo && tab3 === 'btn btn-primario btn-buscar' && tab2.largura === '1366/1366', 'PC 1366: Tab do campo vai ao microfone, Enter liga, Tab segue para Buscar; sem rolagem horizontal');
+  await capturar(pv, '17-voz-pc-1366');
+  await pv.keyboard.press('Escape'); await pv.evaluate(function () { var b = document.querySelector('#conteudo .btn-voz'); if (document.querySelector('#conteudo .busca-linha.ouvindo')) b.click(); });
+  await ctxVoz.close();
+  /* sem SpeechRecognition (Firefox, navegadores antigos) e no iPhone (Safari e Chrome do iPhone): botão nenhum, campo igual ao de hoje */
+  var ctxSem = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', locale: 'pt-BR' });
+  await rotas(ctxSem); await ctxSem.addInitScript(function () { try { delete window.SpeechRecognition; delete window.webkitSpeechRecognition; } catch (e) {} });
+  var ps = await ctxSem.newPage(); colher(ps, errosVoz);
+  await ps.goto(base + '#/'); await ps.waitForSelector('.secao-busca .entrada'); await ps.waitForTimeout(200);
+  var msem = await medirLinha(ps);
+  ok(!msem.voz && msem.padDir === 12 && msem.linha === 56 && !document_tem(await ps.content(), 'voz-aviso'), 'sem SpeechRecognition: nenhum botão de microfone, nem aviso, campo com o espaçamento de hoje (padding ' + msem.padDir + ' px)');
+  await ctxSem.close();
+  var ctxIos = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', locale: 'pt-BR', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' });
+  await rotas(ctxIos); await ctxIos.addInitScript(dubleVoz);
+  var pi = await ctxIos.newPage(); colher(pi, errosVoz);
+  await pi.goto(base + '#/'); await pi.waitForSelector('.secao-busca .entrada'); await pi.waitForTimeout(200);
+  var mios = await medirLinha(pi);
+  ok(!mios.voz && mios.padDir === 12, 'iPhone (Safari): botão escondido mesmo com SpeechRecognition presente (suporte irregular no iOS)');
+  await ir(pi, '#/busca', '.entrada');
+  ok(!(await pi.$('#conteudo .btn-voz')), 'iPhone: também sem microfone na tela Busca');
+  await ctxIos.close();
+  ok(!errosVoz.length, 'sem erros de console na busca por voz' + (errosVoz.length ? ':\n    ' + errosVoz.join('\n    ') : ''));
 
   /* ---------- service worker: registro, cache e uso offline ---------- */
   console.log('\nService worker');

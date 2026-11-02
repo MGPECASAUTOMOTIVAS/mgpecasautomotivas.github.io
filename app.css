@@ -171,6 +171,26 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
   .busca-linha .btn-buscar { width: 56px; padding: 0; }
   .busca-linha .btn-buscar span { display: none; }
 }
+/* busca por voz: o botão do microfone (44px) só existe quando o navegador reconhece fala (app.js: vozDisponivel); fica
+   dentro do campo, à direita, e o × de limpar passa para a esquerda dele quando há texto. Sem o botão, nada muda. */
+.busca-linha .btn-voz { position: absolute; right: 4px; top: 6px; width: 44px; height: 44px; border: 0; background: transparent; color: var(--texto-2); border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.busca-linha .btn-voz svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; position: relative; }
+.busca-linha .btn-voz:active { background: var(--superficie-2); }
+.busca-linha .entrada-wrap:has(.btn-voz) .entrada { padding-left: 12px; padding-right: 48px; }
+.busca-linha .entrada-wrap:has(.btn-voz) .limpar { right: 48px; }
+.busca-linha .entrada-wrap:has(.btn-voz):has(.limpar:not([hidden])) .entrada { padding-right: 92px; }
+@container (max-width: 22rem) { .busca-linha .entrada-wrap:has(.btn-voz) .entrada::placeholder { font-size: .9375rem; } } /* 360 px: "Código, nº original ou nome" inteiro ao lado do microfone, mesmo antes da fonte Barlow carregar */
+/* ouvindo: microfone na cor da MG com um anel que pulsa (discreto; some com prefers-reduced-motion) */
+.busca-linha.ouvindo .btn-voz { color: var(--mg); }
+.busca-linha.ouvindo .btn-voz::before { content: ""; position: absolute; inset: 6px; border-radius: 50%; border: 2px solid var(--mg); opacity: .5; animation: pulsar-voz 1.2s ease-out infinite; }
+.busca-linha.ouvindo .entrada { border-color: var(--mg); }
+@keyframes pulsar-voz { from { transform: scale(.7); opacity: .6; } to { transform: scale(1.25); opacity: 0; } }
+.voz-estado { margin: 8px 0 0; font-size: .875rem; color: var(--texto-2); }
+.voz-estado[hidden] { display: none; }
+.voz-aviso { margin-top: 10px; }
+.voz-aviso .confirmar-corpo p { margin: 0 0 10px; line-height: 1.35; }
+.voz-aviso .confirmar-corpo p:focus { outline: none; }
+.voz-aviso .linha-btn .btn { flex: 1 1 auto; white-space: nowrap; }
 /* Início compacto (pedido do Filipe): seções mais juntas, títulos menores, cartão do veículo com menos espaço entre os campos */
 .inicio > * + * { margin-top: 14px; }
 .inicio .secao { margin-top: 14px; }

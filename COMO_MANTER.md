@@ -20,6 +20,17 @@ Guia curto para o Filipe. Tudo o que está aqui foi testado em 02/11/2026.
   linha; ficha: foto, aplicação completa e números originais; veículo: código, nome, linha e aplicação de todas as peças, na
   ordem e com o filtro da tela) e um QR code do link. Sem valores nem contato. Ctrl+P no computador imprime a mesma folha.
   Tudo é montado no aparelho (CSS `@media print` em `app.css`, seção `#impressao` em `app.js`); nada vai para servidor.
+- **Busca por voz** (botão de microfone dentro do campo "Código, nº original ou nome", no Início e na tela Busca): a
+  pessoa toca, fala ("mangueira radiador gol dois mil e dez um ponto seis") e o app escreve o texto no campo e faz a busca
+  por texto normal. Números falados viram dígitos ("dois mil e dez" → 2010, "um ponto seis" → 1.6, "MG zero zero um" →
+  MG001); nada além disso é trocado. Na 1ª vez aparece um aviso: o áudio é processado pelo serviço de reconhecimento de
+  fala do navegador (no Chrome, o Google) e o app não o guarda; a escolha "Entendi, usar" fica no aparelho (chave
+  `mg-voz-aviso`). **Limitação:** o botão só aparece onde funciona — Chrome, Edge e Samsung Internet no Android ou no
+  computador, com internet. No iPhone/iPad ele fica escondido (o reconhecimento do Safari, que o Chrome do iPhone também
+  usa, falha com frequência), e no Firefox e em navegadores sem reconhecimento de fala não existe; nesses casos a tela
+  fica exatamente como antes. O acerto de nomes de peça depende do serviço do navegador; a busca por texto já tolera
+  erros. Sem permissão do microfone, sem fala ou sem internet, o app avisa e volta ao campo. Código: `vozDisponivel`,
+  `normalizarVoz` e `ligarVoz` em `app.js`.
 - **Etiquetas com QR para a prateleira** — DESLIGADAS desde 02/11 (config.js `etiquetas: false`; o Filipe quer conversar antes, porque a MG já tem etiquetas padrão; o código fica guardado e volta com `etiquetas: true`) (botão "Etiquetas" na Minha lista, tela `#/etiquetas`; na ficha, o link "Etiqueta
   desta peça"): folha A4 de etiquetas adesivas com o logo, o código MG em destaque, o nome, a linha e um QR code que abre a
   ficha da peça no app (`p/MG001.html`). Modelos: Pimaco A4360 (63,5 × 38,1 mm, 21 por folha), A4362 (99 × 33,9 mm, 16),
@@ -84,8 +95,8 @@ git push origin main
 ## 4. Como mudar a versão
 A versão tem que mudar a cada publicação, senão o celular continua com os arquivos antigos. São dois lugares, com
 o mesmo texto (formato ano.mês.dia-número):
-- `config.js` → linha `versao: '2026.11.02-29'`
-- `sw.js` → linha `var VERSAO = '2026.11.02-29';`
+- `config.js` → linha `versao: '2026.11.02-31'`
+- `sw.js` → linha `var VERSAO = '2026.11.02-31';`
 Se os dois ficarem diferentes, o teste do item 5 acusa.
 
 ## 5. Como rodar o teste
@@ -94,8 +105,8 @@ Precisa do Node.js e do Playwright com o Chromium (uma vez só: `npm install -g 
 ```
 node teste/fumaca.js
 ```
-Em uns 25 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, Minha lista, Imprimir / PDF, etiquetas, compartilhar,
-instalar, versão, uso sem internet) e termina com `211/211 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
+Em uns 25 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, Minha lista, Imprimir / PDF, etiquetas, busca por voz, compartilhar,
+instalar, versão, uso sem internet) e termina com `220/220 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
 Para guardar capturas de tela: `node teste/fumaca.js --capturas pasta_das_capturas`.
 
 ## 6. Onde estão as regras

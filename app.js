@@ -310,7 +310,8 @@
     impressora: '<path d="M7 8V3h10v5"/><path d="M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M7 13h10v8H7z"/>',
     mais: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8.5v7M8.5 12h7"/>',
     conversa: '<path d="M12 4a8 8 0 0 0-6.9 12L4 20l4.2-1.1A8 8 0 1 0 12 4z"/>',
-    etiqueta: '<path d="M3 11V4h7l10 10-7 7z"/><circle cx="7.5" cy="8.5" r="1.4"/>'
+    etiqueta: '<path d="M3 11V4h7l10 10-7 7z"/><circle cx="7.5" cy="8.5" r="1.4"/>',
+    microfone: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/><path d="M9 21h6"/>'
   };
   var ICONES_LINHA = {
     'filtro-ar': '<path d="M3 7h4v4H3z"/><path d="M17 13h4v4h-4z"/><path d="M7 9h3a4 4 0 0 1 4 4 2 2 0 0 0 2 2h1"/>',
@@ -1653,9 +1654,140 @@
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') enviar(); });
     var btn = el('button', { type: 'button', class: 'btn btn-primario btn-buscar', 'aria-label': 'Buscar' }, [svg(ICONES.busca), el('span', { text: 'Buscar' })]);
     btn.addEventListener('click', enviar);
-    var wrap = el('div', { class: 'busca-linha' }, [el('div', { class: 'entrada-wrap' }, [svg(ICONES.busca), inp, limpar]), btn]);
+    var btnVoz = vozDisponivel() ? el('button', { type: 'button', class: 'btn-voz', 'aria-label': 'Buscar por voz', title: 'Buscar por voz', 'aria-pressed': 'false' }, [svg(ICONES.microfone)]) : null;
+    var wrap = el('div', { class: 'busca-linha' }, [el('div', { class: 'entrada-wrap' }, [svg(ICONES.busca), inp, limpar, btnVoz]), btn]);
     wrap.input = inp;
+    if (btnVoz) {
+      var linhaWrap = el('div', { class: 'busca-voz' }, [wrap]);
+      ligarVoz({ wrap: wrap, caixa: linhaWrap, input: inp, limpar: limpar, botao: btnVoz, enviar: enviar });
+      linhaWrap.input = inp;
+      return linhaWrap;
+    }
     return wrap;
+  }
+
+  /* ---------- busca por voz (Web Speech API) ----------
+     Só aparece onde funciona de verdade: Chrome, Edge ou Samsung Internet no Android ou no computador, com
+     SpeechRecognition disponível. No iPhone/iPad fica escondida: o Safari expõe webkitSpeechRecognition, mas o
+     reconhecimento falha com frequência (não inicia, para no meio, erro "service-not-allowed"), e o Chrome do iPhone usa
+     o mesmo motor do Safari; melhor não oferecer do que oferecer algo que não responde. Sem suporte, nada muda na tela.
+     O áudio é processado pelo serviço de reconhecimento do navegador (no Chrome, o Google) — por isso o aviso da 1ª vez
+     (escolha "Entendi, usar" guardada em mg-voz-aviso); o app não guarda nem envia o áudio a nenhum outro lugar. */
+  function vozDisponivel() {
+    var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Rec || ehIOS()) return false;
+    return /Chrome\/|Edg\/|SamsungBrowser\//.test(navigator.userAgent) && !/OPR\//.test(navigator.userAgent);
+  }
+  /* o que o reconhecimento devolve vira texto de busca: números falados viram dígitos ("dois mil e dez" → 2010,
+     "um ponto seis"/"um vírgula seis" → 1.6, "zero zero um" → 001), "m g" vira MG e "MG 001" vira MG001. Nada além disso:
+     o texto segue para a busca por texto normal, que já entende veículo, ano, motor, apelidos e tolera erros. */
+  var VOZ_NUM = { zero: 0, um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19,
+    vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80, noventa: 90, cem: 100, cento: 100, duzentos: 200, trezentos: 300, quatrocentos: 400, quinhentos: 500, seiscentos: 600, setecentos: 700, oitocentos: 800, novecentos: 900, mil: 1000 };
+  function normalizarVoz(texto) {
+    var toks = sa(texto).replace(/[,;!?]+/g, ' ').replace(/\s+/g, ' ').split(' ').filter(Boolean), saida = [], i = 0;
+    function numero(t) { return Object.prototype.hasOwnProperty.call(VOZ_NUM, t) ? VOZ_NUM[t] : -1; }
+    function tipo(v) { return v >= 1000 ? 1000 : v >= 100 ? 100 : v >= 10 ? 10 : 0; } /* magnitude: o que pode vir depois de "e" tem que ser menor */
+    while (i < toks.length) {
+      var v0 = numero(toks[i]);
+      if (v0 < 0) { saida.push(toks[i]); i++; continue; }
+      /* grupo de palavras-número: "dois mil e dez", "mil novecentos e noventa e oito", "vinte e um"; termina quando a
+         palavra seguinte não continua o número ("dez um" são dois números: 2010 e o "1" de "1.6") */
+      var total = 0, atual = 0, ultimo = -1, teveMil = false, j = i;
+      while (j < toks.length) {
+        var t = toks[j], v = numero(t), aposE = false;
+        if (t === 'e' && ultimo >= 0 && j + 1 < toks.length) { v = numero(toks[j + 1]); if (v >= 0 && v < tipo(ultimo) && v < 1000) { aposE = true; j++; t = toks[j]; } else break; }
+        if (v < 0) break;
+        if (v === 1000) { if (teveMil || (ultimo >= 0 && aposE)) break; total = (atual || 1) * 1000; atual = 0; ultimo = 1000; teveMil = true; j++; continue; }
+        if (ultimo >= 0 && !aposE && !(ultimo === 1000 && v >= 100)) break;
+        if (ultimo === 0 && v === 0) break; /* "zero zero": dois dígitos separados */
+        atual += v; ultimo = v; j++;
+      }
+      /* "um"/"uma" sozinho é artigo ("uma mangueira"), não número — salvo junto de outro número ou de "ponto"/"vírgula" */
+      if (j === i + 1 && (toks[i] === 'um' || toks[i] === 'uma')) {
+        var antes = toks[i - 1] || '', depois = toks[i + 1] || '';
+        if (!(numero(antes) >= 0 || numero(depois) >= 0 || /^(ponto|virgula)$/.test(antes) || /^(ponto|virgula)$/.test(depois))) { saida.push(toks[i]); i++; continue; }
+      }
+      saida.push(String(total + atual)); i = j;
+    }
+    var s = saida.join(' ');
+    s = s.replace(/(\d)\s*(?:ponto|virgula)\s*(\d)/g, '$1.$2');            /* 1 ponto 6 → 1.6 */
+    s = s.replace(/\b\d(?:\s\d)+\b/g, function (m) { return m.replace(/\s/g, ''); }); /* 0 0 1 → 001 */
+    s = s.replace(/\bm\s+g\b/g, 'mg').replace(/\bmg\s*(?=\d)/g, 'MG').replace(/\bmg\b/g, 'MG'); /* m g 001 → MG001 */
+    return s.replace(/\s+/g, ' ').trim();
+  }
+  var vozAtiva = null; /* reconhecimento em andamento (um por vez) */
+  /* trocar de tela ou sair do app enquanto ouve cancela em silêncio: o resultado que chegasse depois não pode abrir uma
+     busca na tela nova */
+  function pararVoz() { var r = vozAtiva; if (r) { r.mgCancelado = true; try { r.abort(); } catch (e) {} } }
+  window.addEventListener('hashchange', pararVoz);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) pararVoz(); });
+  function ligarVoz(o) {
+    var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var estado = el('p', { class: 'voz-estado', role: 'status', 'aria-live': 'polite', hidden: true });
+    var txtAviso = el('p', { tabindex: '-1', text: 'A busca por voz usa o serviço de reconhecimento de fala do navegador (no Chrome, o Google): o que você falar vai para esse serviço enquanto o microfone estiver ligado. O app não guarda nem envia o áudio a nenhum outro lugar.' });
+    var btnNao = el('button', { type: 'button', class: 'btn btn-mini btn-neutro', text: 'Agora não' });
+    var btnSim = el('button', { type: 'button', class: 'btn btn-mini btn-primario', text: 'Entendi, usar' });
+    var aviso = el('div', { class: 'status info voz-aviso', role: 'group', 'aria-label': 'Busca por voz', hidden: true }, [svg(ICONES.microfone), el('div', { class: 'confirmar-corpo' }, [txtAviso, el('div', { class: 'linha-btn' }, [btnNao, btnSim])])]);
+    o.caixa.appendChild(estado); o.caixa.appendChild(aviso);
+    var rec = null, textoFinal = '', textoParcial = '', houveErro = false, cancelado = false, valorAntes = '';
+    function ouvindo(sim) {
+      o.wrap.classList.toggle('ouvindo', sim);
+      o.botao.setAttribute('aria-pressed', sim ? 'true' : 'false');
+      o.botao.setAttribute('aria-label', sim ? 'Parar de ouvir' : 'Buscar por voz'); o.botao.title = sim ? 'Parar de ouvir' : 'Buscar por voz';
+      estado.hidden = !sim; estado.textContent = sim ? 'Ouvindo… fale o código, o número original ou o nome da peça com o carro. Toque no microfone para parar.' : '';
+      if (sim) { o.input.placeholder = 'Ouvindo…'; o.limpar.hidden = true; } else { o.input.placeholder = 'Código, nº original ou nome'; o.limpar.hidden = !o.input.value; }
+    }
+    function terminar(msg) {
+      if (vozAtiva === rec) vozAtiva = null;
+      rec = null; ouvindo(false);
+      if (msg) { toast(msg); o.input.value = valorAntes; o.limpar.hidden = !o.input.value; o.input.focus({ preventScroll: true }); }
+    }
+    function iniciar() {
+      if (vozAtiva) { try { vozAtiva.abort(); } catch (e) {} vozAtiva = null; }
+      if (!navigator.onLine) { toast('Busca por voz precisa de internet'); o.input.focus({ preventScroll: true }); return; }
+      textoFinal = ''; textoParcial = ''; houveErro = false; cancelado = false; valorAntes = o.input.value;
+      try { rec = new Rec(); } catch (e) { toast('Não foi possível usar a busca por voz neste navegador'); return; }
+      rec.lang = 'pt-BR'; rec.interimResults = true; rec.maxAlternatives = 3; rec.continuous = false;
+      var r = rec;
+      r.onresult = function (ev) {
+        var fim = '', parcial = '';
+        for (var i = 0; i < ev.results.length; i++) { var res = ev.results[i]; var t = res[0] ? res[0].transcript : ''; if (res.isFinal) fim += t + ' '; else parcial += t + ' '; }
+        textoFinal = fim.trim(); textoParcial = parcial.trim();
+        o.input.value = textoFinal || textoParcial; /* o texto parcial aparece no campo enquanto a pessoa fala */
+      };
+      r.onerror = function (ev) {
+        if (r !== rec) return;
+        houveErro = true;
+        var c = ev && ev.error;
+        if (c === 'aborted' || r.mgCancelado || !o.wrap.isConnected) { cancelado = true; return; } /* toque de novo ou outra tela: silêncio */
+        if (c === 'not-allowed' || c === 'service-not-allowed') terminar('Microfone sem permissão');
+        else if (c === 'no-speech') terminar('Não entendi, tente de novo');
+        else if (c === 'network') terminar('Busca por voz precisa de internet');
+        else if (c === 'audio-capture') terminar('Microfone não encontrado');
+        else terminar('Não foi possível usar a busca por voz');
+      };
+      r.onend = function () {
+        if (r !== rec) return;
+        if (cancelado || r.mgCancelado || !o.wrap.isConnected) { terminar(); o.input.value = valorAntes; o.limpar.hidden = !o.input.value; return; }
+        if (houveErro) return; /* o toast já saiu em onerror */
+        var texto = normalizarVoz(textoFinal || textoParcial);
+        if (!texto) { terminar('Não entendi, tente de novo'); return; }
+        terminar(); o.input.value = texto; o.limpar.hidden = false; o.enviar();
+      };
+      vozAtiva = r; ouvindo(true);
+      try { r.start(); } catch (e) { terminar('Não foi possível usar a busca por voz'); }
+    }
+    function cancelar() { cancelado = true; var r = rec; if (r) { try { r.abort(); } catch (e) {} } }
+    o.botao.addEventListener('click', function () {
+      if (rec) { cancelar(); return; }
+      if (!aviso.hidden) { aviso.hidden = true; return; }
+      if (ls('mg-voz-aviso') === 'ok') { iniciar(); return; }
+      aviso.hidden = false; txtAviso.focus();
+    });
+    btnNao.addEventListener('click', function () { aviso.hidden = true; o.botao.focus(); });
+    btnSim.addEventListener('click', function () { ls('mg-voz-aviso', 'ok'); aviso.hidden = true; iniciar(); });
+    o.input.addEventListener('input', function () { if (rec) o.limpar.hidden = true; });
+    o.limpar.addEventListener('click', function () { if (rec) cancelar(); });
   }
   function preencherLinhas(grade, max) {
     grade.innerHTML = '';
