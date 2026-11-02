@@ -1,5 +1,6 @@
-# TEMPORÁRIO (sai do branch no commit seguinte): tira as capturas da ficha da App Store do app no ar, com Playwright,
-# e põe no log em base64 (WebP sem perda) para serem baixadas por quem não alcança o site nem os artefatos.
+# TEMPORÁRIO (sai do branch depois de guardar as capturas): tira as capturas da ficha da App Store do app no ar, com
+# Playwright, e põe no log em base64 (WebP sem perda) para serem baixadas por quem não alcança o site nem os artefatos.
+# Versão 2026.11.02-33 em diante: app sempre claro; a tela escura vem de localStorage mg-tema = 'dark'.
 name: Capturas App Store (temporário)
 
 on:
@@ -39,8 +40,11 @@ jobs:
           /* Capturas de tela da ficha da App Store, tiradas do app real com Playwright (Chromium), sem retoque.
              Uso: node capturas_apple.js <pasta de saída> [base]   (base padrão: https://mgpecasautomotivas.github.io/)
              Tamanhos (retrato, 3x): 6,9" 440x956 → 1320x2868 · 6,5" 414x896 → 1242x2688 · 6,3" 402x874 → 1206x2622.
-             O contexto imita o app do iPhone: user agent do iPhone + "MGCatalogoApp-iOS", window.MG_APP_LOJA = 'ios',
-             navigator.share presente (a ponte do app) e modo "instalado" (sem convites para instalar).
+             O contexto imita o app do iPhone: user agent do iPhone + "MGCatalogoApp-iOS", window.MG_APP_LOJA = 'ios' e
+             navigator.share presente (a ponte do app). Os convites para instalar somem pela marca do app (versão -33 em diante).
+             Tema: o app abre sempre claro (versão 2026.11.02-33 em diante); a tela escura é a escolha da pessoa no botão da lua,
+             guardada em localStorage mg-tema = 'dark'. Por isso o esquema do sistema fica sempre claro e a captura escura só grava
+             mg-tema = 'dark' antes de a página carregar.
              Variável LOCAL=1: as fotos da loja e o próprio app vêm de um servidor local (para testar o roteiro sem rede). */
           'use strict';
           const { chromium } = require('playwright');
@@ -59,16 +63,17 @@ jobs:
             { codigo: 'MG325', qtd: 2 }, { codigo: 'MG046', qtd: 2 }
           ].map((x, i) => Object.assign({ adicionadoEm: '2026-11-02T1' + i + ':00:00.000Z' }, x));
           const TELAS = [
-            { nome: '01-inicio', hash: '#/', esquema: 'light', espera: '.abas' },
-            { nome: '02-inicio-escuro', hash: '#/', esquema: 'dark', espera: '.abas' },
-            { nome: '03-ficha-da-peca', hash: '#/peca/MG001', esquema: 'light', espera: 'h1, .peca-cod, .ficha' },
-            { nome: '04-pecas-do-veiculo', hash: '#/veiculo/Volkswagen/Gol/2010?motor=1.6', esquema: 'light', espera: '.painel-res .lista .item-lista' },
-            { nome: '05-minha-lista', hash: '#/lista', esquema: 'light', espera: '.abas', lista: true }
+            { nome: '01-inicio', hash: '#/', espera: '.abas' },
+            { nome: '02-inicio-escuro', hash: '#/', espera: '.abas', tema: 'dark' },
+            { nome: '03-ficha-da-peca', hash: '#/peca/MG001', espera: 'h1, .peca-cod, .ficha' },
+            { nome: '04-pecas-do-veiculo', hash: '#/veiculo/Volkswagen/Gol/2010?motor=1.6', espera: '.painel-res .lista .item-lista' },
+            { nome: '05-minha-lista', hash: '#/lista', espera: '.abas', lista: true }
           ];
 
-          function initApp(lista) {
+          function initApp(o) {
+            var lista = o.lista, tema = o.tema;
             window.MG_APP_LOJA = 'ios';
-            try { Object.defineProperty(navigator, 'standalone', { get: function () { return true; }, configurable: true }); } catch (e) {}
+            try { if (tema) localStorage.setItem('mg-tema', tema); else localStorage.removeItem('mg-tema'); } catch (e) {}
             try {
               Object.defineProperty(navigator, 'share', { value: function () { return Promise.resolve(); }, configurable: true, writable: true });
               Object.defineProperty(navigator, 'canShare', { value: function () { return true; }, configurable: true, writable: true });
@@ -93,10 +98,10 @@ jobs:
               for (const tela of TELAS) {
                 const ctx = await navegador.newContext({
                   viewport: { width: t.w, height: t.h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true,
-                  userAgent: UA, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', colorScheme: tela.esquema
+                  userAgent: UA, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', colorScheme: 'light'
                 });
                 if (process.env.LOCAL_ROTAS) await require(path.resolve(process.env.LOCAL_ROTAS))(ctx);
-                await ctx.addInitScript(initApp, tela.lista ? LISTA : null);
+                await ctx.addInitScript(initApp, { lista: tela.lista ? LISTA : null, tema: tela.tema || null });
                 const page = await ctx.newPage();
                 const erros = [];
                 page.on('pageerror', e => erros.push(e.message));
@@ -107,7 +112,10 @@ jobs:
                 await esperarImagens(page);
                 await page.waitForTimeout(800);
                 const info = await page.evaluate(() => ({ titulo: document.title, tema: getComputedStyle(document.body).backgroundColor,
-                  instalar: !!document.querySelector('.instalar-cartao, .faixa-instalar:not([hidden])'),
+                  dataTheme: document.documentElement.getAttribute('data-theme'),
+                  instalar: Array.from(document.querySelectorAll('.instalar-cartao, #faixa-instalar, #folha-ios')).some(function (e) {
+                    var r = e.getBoundingClientRect(), cs = getComputedStyle(e);
+                    return !e.hidden && cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0 && r.height > 0; }),
                   imagens: Array.from(document.images).filter(i => i.complete && i.naturalWidth > 0).length + '/' + document.images.length,
                   versao: (self.MG_CONFIG && self.MG_CONFIG.versao) || '' }));
                 const arq = path.join(SAIDA, t.pasta, tela.nome + '.png');
@@ -120,7 +128,6 @@ jobs:
             await navegador.close();
             fs.writeFileSync(path.join(SAIDA, 'relatorio.txt'), relatorio.join('\n') + '\n');
           })().catch(e => { console.error(e); process.exit(1); });
-
           ROTEIRO
       - name: Capturar do app no ar
         working-directory: ${{ runner.temp }}/c
