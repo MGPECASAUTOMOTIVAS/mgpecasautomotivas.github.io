@@ -81,8 +81,27 @@ jobs:
           if ! grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/build.log"; then tail -n 120 "$RUNNER_TEMP/build.log"; exit 1; fi
           APP="$PWD/build/Build/Products/Debug-iphonesimulator/MGPecas.app"
           test -d "$APP"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleDisplayName" -c "Print :WKAppBoundDomains" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleDisplayName" -c "Print :WKAppBoundDomains" -c "Print :NSPhotoLibraryAddUsageDescription" "$APP/Info.plist"
           echo "APP=$APP" >> "$GITHUB_ENV"
+
+      - name: Compilar o Release para iPhone (sem assinatura) e conferir que ele não tem o código de teste
+        # O que vai para a App Store é o Release. Os argumentos de teste (-mgDiagnostico, -mgEndereco, -mgTema, -mgLista)
+        # e o inspetor da página só existem no Debug (#if DEBUG). Prova: textos desse código estão no Debug (controle) e
+        # não podem estar no Release; se estiverem, o job falha.
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project MGPecas.xcodeproj -scheme MGPecas -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/release.log" | grep -E "error:|BUILD (SUCCEEDED|FAILED)|\*\* " || true
+          if ! grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/release.log"; then tail -n 120 "$RUNNER_TEMP/release.log"; exit 1; fi
+          REL="$PWD/build/Build/Products/Release-iphoneos/MGPecas.app"
+          test -d "$REL"
+          for t in "localStorage.setItem('mg-tema'" "localStorage.setItem('mg-lista'" "MG-DIAGNOSTICO-ERRO" "getRegistrations"; do
+            grep -r -q -F "$t" "$APP" || { echo "::error::Controle falhou: '$t' não foi achado no build Debug."; exit 1; }
+            if grep -r -q -F "$t" "$REL"; then echo "::error::O build Release tem código de teste ('$t')."; exit 1; fi
+          done
+          echo "Release sem o código de teste: -mgDiagnostico, -mgEndereco, -mgTema e -mgLista não fazem nada no app da loja."
 
       - name: Abrir no iPhone simulado e conferir (catálogo, service worker, sem o site no ar, sem internet)
         # teste de comportamento: se falhar, o build continua valendo; o resultado fica no log e nas imagens
@@ -224,6 +243,12 @@ jobs:
             MARKETING_VERSION="$VERSAO" CURRENT_PROJECT_VERSION="$BUILD" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGNING_ALLOWED=NO archive 2>&1 | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)|\*\* " || true
           if ! grep -q "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log"; then tail -n 120 "$RUNNER_TEMP/archive.log"; exit 1; fi
+          # o app arquivado não pode ter o código de teste do Debug (ver o job "verificar")
+          ARQ="$RUNNER_TEMP/MGPecas.xcarchive/Products/Applications/MGPecas.app"
+          test -d "$ARQ"
+          for t in "localStorage.setItem('mg-tema'" "localStorage.setItem('mg-lista'" "MG-DIAGNOSTICO-ERRO" "getRegistrations"; do
+            if grep -r -q -F "$t" "$ARQ"; then echo "::error::O app arquivado tem código de teste ('$t'). Nada foi enviado."; exit 1; fi
+          done
 
       - name: Assinar e enviar ao App Store Connect
         env:

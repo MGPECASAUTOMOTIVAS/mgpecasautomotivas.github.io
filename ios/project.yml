@@ -33,6 +33,9 @@ targets:
         LSRequiresIPhoneOS: true
         # só HTTPS, criptografia padrão do sistema: isenta (dispensa a pergunta de exportação a cada envio)
         ITSAppUsesNonExemptEncryption: false
+        # tocar e segurar numa foto do catálogo oferece "Salvar em Fotos" (menu do próprio iPhone); sem este texto o iOS
+        # pode fechar o app nessa hora. O app não lê nada do Fotos: só acrescenta a imagem que a pessoa escolheu salvar.
+        NSPhotoLibraryAddUsageDescription: Para salvar no app Fotos a imagem do catálogo que você escolher salvar.
         UIRequiredDeviceCapabilities: [arm64]
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIStatusBarStyle: UIStatusBarStyleLightContent
