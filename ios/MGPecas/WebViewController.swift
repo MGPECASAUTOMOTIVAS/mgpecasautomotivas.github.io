@@ -46,6 +46,11 @@ final class WebViewController: UIViewController {
         if let ponte = Self.lerPonte() {
             conteudo.addUserScript(WKUserScript(source: ponte, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
+        #if DEBUG
+        if let teste = Self.scriptDeTeste() {
+            conteudo.addUserScript(WKUserScript(source: teste, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
+        #endif
         conteudo.add(MensageiroFraco(self), name: "mgApp")
         configuracao.userContentController = conteudo
 
@@ -374,6 +379,28 @@ extension WebViewController {
         guard let i = argumentos.firstIndex(of: "-mgEndereco"), i + 1 < argumentos.count,
               let url = URL(string: argumentos[i + 1]), url.host?.lowercased() == hostDoApp else { return nil }
         return url
+    }
+
+    /// Estado inicial para o teste e as capturas de tela no simulador, gravado antes de a página carregar:
+    /// "-mgTema dark" (ou "light") grava o tema escolhido (localStorage mg-tema) e "-mgLista <JSON em base64>" grava a
+    /// Minha lista (localStorage mg-lista).
+    static func scriptDeTeste() -> String? {
+        let argumentos = ProcessInfo.processInfo.arguments
+        func valor(_ nome: String) -> String? {
+            guard let i = argumentos.firstIndex(of: nome), i + 1 < argumentos.count else { return nil }
+            return argumentos[i + 1]
+        }
+        var js = ""
+        if let tema = valor("-mgTema"), tema == "dark" || tema == "light" {
+            js += "try { localStorage.setItem('mg-tema', '\(tema)'); } catch (e) {}\n"
+        }
+        if let base64 = valor("-mgLista"), let dados = Data(base64Encoded: base64),
+           let texto = String(data: dados, encoding: .utf8),
+           let json = try? JSONSerialization.data(withJSONObject: [texto]),
+           let literal = String(data: json, encoding: .utf8) {
+            js += "try { localStorage.setItem('mg-lista', \(literal)[0]); } catch (e) {}\n"
+        }
+        return js.isEmpty ? nil : js
     }
 
     /// Com o argumento "-mgDiagnostico", escreve no console (stderr) o que a página vê: marca da loja, ponte,
