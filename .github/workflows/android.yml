@@ -10,6 +10,11 @@
 #
 # Como rodar: Actions → "Android (Google Play)" → Run workflow. Para enviar uma versão nova à Play, o appVersionCode do
 # twa-manifest.json tem que ser maior que o do último envio (ou informe-o na caixa "version_code" ao rodar).
+#
+# Build de TESTE (só em push no branch "lojas" e só quando os dois segredos acima NÃO existem): o runner cria uma chave
+# descartável, que some no fim do run, e assina com ela, para provar que o build funciona. Os arquivos saem com o nome
+# "TESTE-NAO-ENVIAR-..." e NÃO servem para a Play (a Play recusa: a chave não é a de upload). Com os segredos
+# configurados, o workflow usa sempre a chave de verdade, do mesmo jeito de antes.
 name: Android (Google Play)
 
 on:
@@ -22,6 +27,12 @@ on:
   push:
     tags:
       - 'android-v*'
+    # build de teste do branch de preparação das lojas (ver o cabeçalho)
+    branches:
+      - lojas
+    paths:
+      - '.github/workflows/android.yml'
+      - 'twa-manifest.json'
 
 permissions:
   contents: write
@@ -48,11 +59,19 @@ jobs:
           faltam=""
           [ -n "$KS" ] || faltam="$faltam KEYSTORE_B64"
           [ -n "$PW" ] || faltam="$faltam KEYSTORE_PASSWORD"
-          if [ -n "$faltam" ]; then
-            echo "::error::Faltam os segredos:$faltam. Crie em Settings → Secrets and variables → Actions (veja play/GUIA_GOOGLE_PLAY.md) e rode o workflow de novo."
-            exit 1
+          if [ -z "$faltam" ]; then
+            echo "MODO=real" >> "$GITHUB_ENV"
+            echo "Segredos encontrados."
+            exit 0
           fi
-          echo "Segredos encontrados."
+          # sem nenhum dos dois segredos, num push no branch lojas: build de TESTE com chave descartável
+          if [ -z "$KS" ] && [ -z "$PW" ] && [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/lojas" ]; then
+            echo "MODO=teste" >> "$GITHUB_ENV"
+            echo "::warning::Build de TESTE: sem os segredos KEYSTORE_B64 e KEYSTORE_PASSWORD, o app é assinado com uma chave descartável criada neste run. Os arquivos TESTE-NAO-ENVIAR-* não servem para a Play."
+            exit 0
+          fi
+          echo "::error::Faltam os segredos:$faltam. Crie em Settings → Secrets and variables → Actions (veja play/GUIA_GOOGLE_PLAY.md) e rode o workflow de novo."
+          exit 1
 
       - name: Baixar o repositório
         uses: actions/checkout@v4
@@ -108,10 +127,23 @@ jobs:
           TWA="$RUNNER_TEMP/twa"
           mkdir -p "$TWA"
           cp twa-manifest.json "$TWA/twa-manifest.json"
-          printf '%s' "$KEYSTORE_B64" | tr -d '\n\r ' | base64 -d > "$TWA/mg-app-upload.keystore"
-          if [ ! -s "$TWA/mg-app-upload.keystore" ]; then
-            echo "::error::O segredo KEYSTORE_B64 não é um base64 válido do keystore."
-            exit 1
+          if [ "$MODO" = "teste" ]; then
+            # chave descartável (só existe neste run), com o mesmo alias "mgapp" do twa-manifest.json, num arquivo com nome de teste
+            TESTE_KS_PASS="$(openssl rand -hex 24)"
+            echo "::add-mask::$TESTE_KS_PASS"
+            echo "TESTE_KS_PASS=$TESTE_KS_PASS" >> "$GITHUB_ENV"
+            node -e "const fs=require('fs');const p=process.argv[1];const m=JSON.parse(fs.readFileSync(p,'utf8'));m.signingKey.path='TESTE-chave-descartavel.keystore';fs.writeFileSync(p,JSON.stringify(m,null,2)+'\n');" "$TWA/twa-manifest.json"
+            keytool -genkeypair -noprompt -storetype PKCS12 -keystore "$TWA/TESTE-chave-descartavel.keystore" -alias mgapp \
+              -keyalg RSA -keysize 2048 -validity 30 -storepass "$TESTE_KS_PASS" -keypass "$TESTE_KS_PASS" \
+              -dname "CN=TESTE - NAO ENVIAR A PLAY, O=Build de teste, C=BR" > /dev/null
+            echo "KS_ARQ=$TWA/TESTE-chave-descartavel.keystore" >> "$GITHUB_ENV"
+          else
+            printf '%s' "$KEYSTORE_B64" | tr -d '\n\r ' | base64 -d > "$TWA/mg-app-upload.keystore"
+            if [ ! -s "$TWA/mg-app-upload.keystore" ]; then
+              echo "::error::O segredo KEYSTORE_B64 não é um base64 válido do keystore."
+              exit 1
+            fi
+            echo "KS_ARQ=$TWA/mg-app-upload.keystore" >> "$GITHUB_ENV"
           fi
           if [ -n "$VERSION_CODE" ]; then
             case "$VERSION_CODE" in
@@ -126,7 +158,8 @@ jobs:
         env:
           KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
-          if ! keytool -list -keystore "$TWA/mg-app-upload.keystore" -storepass "$KS_PASS" -alias mgapp > /dev/null 2>&1; then
+          if [ "$MODO" = "teste" ]; then KS_PASS="$TESTE_KS_PASS"; fi
+          if ! keytool -list -keystore "$KS_ARQ" -storepass "$KS_PASS" -alias mgapp > /dev/null 2>&1; then
             echo "::error::A senha KEYSTORE_PASSWORD não abre o keystore, ou a chave 'mgapp' não existe nele."
             exit 1
           fi
@@ -141,7 +174,11 @@ jobs:
         env:
           BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-        run: bubblewrap build --skipPwaValidation
+        run: |
+          if [ "$MODO" = "teste" ]; then
+            export BUBBLEWRAP_KEYSTORE_PASSWORD="$TESTE_KS_PASS" BUBBLEWRAP_KEY_PASSWORD="$TESTE_KS_PASS"
+          fi
+          bubblewrap build --skipPwaValidation
 
       - name: Conferir a assinatura e nomear os arquivos
         working-directory: ${{ env.TWA }}
@@ -150,23 +187,29 @@ jobs:
           test -f app-release-signed.apk
           echo "APK:"; "$ANDROID_HOME/build-tools/${BUILD_TOOLS}/apksigner" verify --print-certs app-release-signed.apk | grep -i 'SHA-256'
           echo "AAB:"; keytool -printcert -jarfile app-release-bundle.aab | grep -i 'SHA256:'
+          echo "Pacote e versão do APK:"; "$ANDROID_HOME/build-tools/${BUILD_TOOLS}/aapt2" dump badging app-release-signed.apk | head -n 1
           V=$(node -e "const m=require('./twa-manifest.json');console.log(m.appVersion+'-c'+m.appVersionCode)")
+          PREFIXO="mg-pecas"
+          if [ "$MODO" = "teste" ]; then
+            PREFIXO="TESTE-NAO-ENVIAR-mg-pecas"
+            echo "::warning::Arquivos de TESTE (chave descartável). Não envie à Play; instalado pelo .apk, o app abre com a barra do navegador porque a chave não é a do assetlinks.json."
+          fi
           mkdir -p saida
-          cp app-release-bundle.aab "saida/mg-pecas-$V.aab"
-          cp app-release-signed.apk "saida/mg-pecas-$V.apk"
+          cp app-release-bundle.aab "saida/$PREFIXO-$V.aab"
+          cp app-release-signed.apk "saida/$PREFIXO-$V.apk"
           ls -la saida
           echo "SAIDA=$RUNNER_TEMP/twa/saida" >> "$GITHUB_ENV"
 
-      - name: Guardar .aab e .apk como artefatos (30 dias)
+      - name: Guardar .aab e .apk como artefatos (30 dias; build de teste, 7 dias)
         uses: actions/upload-artifact@v4
         with:
-          name: mg-pecas-android
+          name: ${{ env.MODO == 'teste' && 'TESTE-NAO-ENVIAR-mg-pecas-android' || 'mg-pecas-android' }}
           path: ${{ env.SAIDA }}/*
-          retention-days: 30
+          retention-days: ${{ env.MODO == 'teste' && 7 || 30 }}
           if-no-files-found: error
 
       - name: Release do GitHub (só em tag android-v*)
-        if: startsWith(github.ref, 'refs/tags/android-v')
+        if: startsWith(github.ref, 'refs/tags/android-v') && env.MODO == 'real'
         uses: softprops/action-gh-release@v2
         with:
           name: App Android ${{ github.ref_name }}
