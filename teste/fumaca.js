@@ -509,6 +509,14 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
     ok(!(await page.$('#conteudo .link-etiqueta')), 'ficha sem o link Etiqueta desta peça');
     await page.goto(base + '#/etiquetas'); await page.waitForTimeout(400);
     ok(/#\/lista$/.test(page.url()), '#/etiquetas manda para #/lista');
+    /* nenhum texto visível fala de etiquetas: Minha lista (ajuda), ficha, Sobre e a página de privacidade */
+    var semEtq = [];
+    for (var ie = 0, telasEtq = [['#/peca/MG001', '.acoes-peca'], ['#/lista', '.lista-acoes'], ['#/sobre', '.versao']]; ie < telasEtq.length; ie++) {
+      await ir(page, telasEtq[ie][0], telasEtq[ie][1]);
+      if (/etiqueta/i.test(await page.evaluate(function () { return document.getElementById('conteudo').innerText; }))) semEtq.push(telasEtq[ie][0]);
+    }
+    if (/etiqueta/i.test(fs.readFileSync(path.join(APP, 'privacidade.html'), 'utf8').replace(/<!--[\s\S]*?-->/g, ''))) semEtq.push('privacidade.html');
+    ok(!semEtq.length, 'nenhum texto de etiqueta na Minha lista, na ficha, no Sobre nem em privacidade.html' + (semEtq.length ? ': ' + semEtq.join(', ') : ''));
     await page.evaluate(function () { localStorage.removeItem('mg-lista'); });
   }
   if (ETIQUETAS) {
@@ -599,6 +607,44 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await ir(page, '#/etiquetas', '.vazio');
   ok(/Lista vazia/.test(await page.textContent('#conteudo .vazio')) && !!(await page.$('#conteudo .vazio a.btn')), 'lista vazia: estado vazio explica como adicionar peças, com "Buscar peça"');
   }
+
+  console.log('\nMinha lista: caminhos raros (revisão do ciclo 30)');
+  /* mg-lista corrompido com código repetido: um cartão por código (a 1ª vez vale) e o contador da aba conta só peças do catálogo */
+  await page.evaluate(function () { localStorage.setItem('mg-lista', JSON.stringify([{ codigo: 'mg001', qtd: 2 }, { codigo: 'MG001', qtd: 5 }, null, { codigo: 7 }, { codigo: 'XX999', qtd: 1 }, { codigo: 'MG076', qtd: 'abc' }])); });
+  await ir(page, '#/lista', '.lista-item');
+  var corrompida = await page.evaluate(function () { return { cods: Array.prototype.map.call(document.querySelectorAll('#conteudo .lista-item'), function (li) { return li.getAttribute('data-cod') + ':' + li.querySelector('.qtd-num').value; }).join(' '), badge: document.querySelector('.aba[data-aba="lista"] .aba-badge').textContent }; });
+  ok(corrompida.cods === 'MG001:2 MG076:1' && corrompida.badge === '2', 'mg-lista corrompido: código repetido entra uma vez, quantidade inválida vira 1, código fora do catálogo não conta na aba (' + corrompida.cods + ' · aba ' + corrompida.badge + ')');
+  /* toast "Lista: N un. · Ver lista" some ao abrir a própria Minha lista (não fica cobrindo a lista com um link para ela) */
+  await ir(page, '#/peca/MG046', '.btn-lista');
+  await page.click('#conteudo .btn-lista'); await page.waitForSelector('#toast:not([hidden]) a.toast-acao');
+  await page.click('.aba[data-aba="lista"]'); await page.waitForSelector('#conteudo > :not([data-velho]) .lista-item[data-cod="MG046"]');
+  ok(await page.evaluate(function () { return document.getElementById('toast').hidden; }), 'toast "Na lista · Ver lista" some ao tocar na aba Lista');
+  /* "Desfazer" tocado já em outra tela: devolve a peça sem trocar a folha de impressão da tela aberta */
+  await page.click('#conteudo .lista-item[data-cod="MG046"] .item-remover'); await page.waitForSelector('#toast:not([hidden]) button.toast-acao');
+  await ir(page, '#/peca/MG001', '.acoes-peca .btn-imprimir');
+  await page.click('#toast button.toast-acao'); await page.waitForTimeout(80);
+  var desfOutra = await page.evaluate(function () { return JSON.parse(localStorage.getItem('mg-lista')).map(function (x) { return x.codigo; }).join(' '); });
+  await page.click('#conteudo .acoes-peca .btn-imprimir');
+  var folhaDesf = await lerFolha();
+  ok(desfOutra === 'MG001 XX999 MG076 MG046' && folhaDesf && folhaDesf.titulo === 'Ficha da peça MG001', '"Desfazer" em outra tela devolve a peça e a ficha segue imprimindo a ficha (' + desfOutra + ' · ' + (folhaDesf && folhaDesf.titulo) + ')');
+  await page.evaluate(function () { window.dispatchEvent(new Event('afterprint')); });
+  /* armazenamento cheio ou bloqueado: "+" e "Adicionar à lista" avisam em vez de dizer "Na lista" */
+  await page.evaluate(function () { window.__setItem = Storage.prototype.setItem; Storage.prototype.setItem = function () { var e = new Error('cheio'); e.name = 'QuotaExceededError'; throw e; }; });
+  await page.click('#conteudo .btn-lista'); await page.waitForSelector('#toast:not([hidden]) .toast-txt');
+  var cheio = await page.evaluate(function () { return { toast: document.querySelector('#toast .toast-txt').textContent, qtd: JSON.parse(localStorage.getItem('mg-lista'))[0].qtd, badge: document.querySelector('#conteudo .btn-lista .btn-badge').textContent }; });
+  await ir(page, '#/lista', '.lista-item');
+  await page.click('#conteudo .lista-item[data-cod="MG001"] .qtd-btn:last-of-type'); await page.waitForTimeout(80);
+  var cheioQtd = await page.evaluate(function () { return { num: document.querySelector('#conteudo .lista-item[data-cod="MG001"] .qtd-num').value, toast: document.querySelector('#toast .toast-txt') && document.querySelector('#toast .toast-txt').textContent }; });
+  await page.click('#conteudo .lista-item[data-cod="MG076"] .item-remover'); await page.waitForTimeout(80);
+  var cheioRem = await page.evaluate(function () { return document.querySelectorAll('#conteudo .lista-item').length; });
+  await page.evaluate(function () { Storage.prototype.setItem = window.__setItem; });
+  ok(/Não foi possível guardar a lista/.test(cheio.toast) && cheio.qtd === 2 && cheio.badge === '2' && cheioQtd.num === '2' && /Não foi possível guardar/.test(cheioQtd.toast) && cheioRem === 3, 'armazenamento cheio: adicionar, mudar quantidade e remover avisam e não fingem que guardaram (' + cheio.toast + ')');
+  /* folha do veículo vindo da placa (cil sem motor nem filtro): link e QR com "?cil=", não "&cil=" */
+  await ir(page, '#/veiculo/Volkswagen/Gol/2010?via=placa&cil=1.6', '.res-barra .btn-imprimir');
+  await page.click('#conteudo .res-barra .btn-imprimir');
+  var folhaCil = await lerFolha();
+  ok(folhaCil && folhaCil.link === 'https://mgpecasautomotivas.github.io/#/veiculo/Volkswagen/Gol/2010?cil=1.6', 'folha do veículo pela placa: link ' + (folhaCil && folhaCil.link));
+  await page.evaluate(function () { window.dispatchEvent(new Event('afterprint')); localStorage.removeItem('mg-lista'); });
 
   console.log('\nLinhas, Instalar, Sobre');
   await ir(page, '#/linhas', '.grade-linhas .linha-card');

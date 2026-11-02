@@ -33,10 +33,11 @@
     if (attrs) Object.keys(attrs).forEach(function (k) { s.setAttribute(k, attrs[k]); });
     s.innerHTML = paths; return s;
   }
-  function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
+  /* gravar (v definido) devolve true/false: com o armazenamento cheio ou bloqueado o setItem lança, e quem chama pode avisar */
+  function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); return true; } catch (e) { return v === undefined ? null : false; } }
   /* sessionStorage: dura só enquanto a aba/app estiver aberto (usado para a placa digitada; nunca vai para o localStorage) */
   function ss(k, v) { try { if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { return null; } }
-  function lsJson(k, v) { if (v === undefined) { try { return JSON.parse(ls(k) || 'null'); } catch (e) { return null; } } ls(k, JSON.stringify(v)); }
+  function lsJson(k, v) { if (v === undefined) { try { return JSON.parse(ls(k) || 'null'); } catch (e) { return null; } } return ls(k, JSON.stringify(v)); }
   function carregar(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + url); return r.json(); }); }
   function plural(n, s, p) { return n + ' ' + (n === 1 ? s : p); }
   function dataBr(d) { return String(d || '').split('-').reverse().join('/'); } /* 2026-11-02 → 02/11/2026 */
@@ -229,22 +230,28 @@
   function qtdValida(n) { n = Math.round(+n); if (!(n >= 1)) n = 1; return Math.min(n, QTD_MAX); }
   function lista() {
     var l = lsJson('mg-lista');
-    return Array.isArray(l) ? l.filter(function (x) { return x && typeof x.codigo === 'string' && x.codigo; }).map(function (x) { return { codigo: x.codigo.toUpperCase(), qtd: qtdValida(x.qtd), adicionadoEm: x.adicionadoEm || '' }; }) : [];
+    if (!Array.isArray(l)) return [];
+    /* mg-lista corrompido (editado à mão, outra versão): ignora itens sem código e fica com a 1ª vez de cada código */
+    var vistos = {};
+    return l.filter(function (x) { return x && typeof x.codigo === 'string' && x.codigo; }).map(function (x) { return { codigo: x.codigo.toUpperCase(), qtd: qtdValida(x.qtd), adicionadoEm: typeof x.adicionadoEm === 'string' ? x.adicionadoEm : '' }; })
+      .filter(function (x) { if (vistos[x.codigo]) return false; vistos[x.codigo] = 1; return true; });
   }
-  function gravarLista(l) { lsJson('mg-lista', l.slice(0, LISTA_MAX)); pintarBadgeLista(); }
+  /* false quando o aparelho não deixou guardar (armazenamento cheio ou bloqueado): quem chama avisa em vez de fingir que guardou */
+  function gravarLista(l) { var ok = lsJson('mg-lista', l.slice(0, LISTA_MAX)) !== false; pintarBadgeLista(); return ok; }
+  var MSG_NAO_GUARDOU = 'Não foi possível guardar a lista neste aparelho (armazenamento cheio ou bloqueado).';
   function naLista(cod) { cod = String(cod).toUpperCase(); var l = lista(); for (var i = 0; i < l.length; i++) if (l[i].codigo === cod) return l[i]; return null; }
   /* soma 1 (ou n) à peça; entra no fim se ainda não está. Devolve { qtd, nova } ou null com a lista cheia */
   function adicionarLista(cod, n) {
     cod = String(cod).toUpperCase(); var l = lista(), it = null;
     l.forEach(function (x) { if (x.codigo === cod) it = x; });
-    if (it) { it.qtd = qtdValida(it.qtd + (n || 1)); gravarLista(l); return { qtd: it.qtd, nova: false }; }
+    if (it) { it.qtd = qtdValida(it.qtd + (n || 1)); return gravarLista(l) ? { qtd: it.qtd, nova: false } : { erro: true }; }
     if (l.length >= LISTA_MAX) return null;
     it = { codigo: cod, qtd: qtdValida(n || 1), adicionadoEm: new Date().toISOString() };
-    l.push(it); gravarLista(l); return { qtd: it.qtd, nova: true };
+    l.push(it); return gravarLista(l) ? { qtd: it.qtd, nova: true } : { erro: true };
   }
-  function definirQtdLista(cod, qtd) { var l = lista(); l.forEach(function (x) { if (x.codigo === cod) x.qtd = qtdValida(qtd); }); gravarLista(l); }
+  function definirQtdLista(cod, qtd) { var l = lista(); l.forEach(function (x) { if (x.codigo === cod) x.qtd = qtdValida(qtd); }); return gravarLista(l); }
   /* devolve { item, pos } para o "Desfazer" do toast */
-  function removerLista(cod) { var l = lista(), pos = -1; l.forEach(function (x, i) { if (x.codigo === cod) pos = i; }); if (pos < 0) return null; var it = l.splice(pos, 1)[0]; gravarLista(l); return { item: it, pos: pos }; }
+  function removerLista(cod) { var l = lista(), pos = -1; l.forEach(function (x, i) { if (x.codigo === cod) pos = i; }); if (pos < 0) return null; var it = l.splice(pos, 1)[0]; if (!gravarLista(l)) return null; return { item: it, pos: pos }; }
   function devolverLista(r) { var l = lista().filter(function (x) { return x.codigo !== r.item.codigo; }); l.splice(Math.min(r.pos, l.length), 0, r.item); gravarLista(l); }
   function limparLista() { gravarLista([]); }
   /* itens cujo código existe no catálogo carregado */
@@ -264,6 +271,7 @@
   function adicionarComToast(cod, prefixo) {
     var r = adicionarLista(cod);
     if (!r) { toast('A lista está cheia (' + LISTA_MAX + ' peças). Envie ou limpe a lista.'); return null; }
+    if (r.erro) { toast(MSG_NAO_GUARDOU); return null; }
     var pre = prefixo ? prefixo + ' ' : '';
     toast(r.nova ? (pre ? pre + 'na lista' : 'Na lista') : (pre ? pre + 'na lista: ' : 'Lista: ') + r.qtd + ' un.', { texto: 'Ver lista', href: '#/lista' });
     return r;
@@ -272,7 +280,7 @@
   var abaLista = null;
   function pintarBadgeLista() {
     if (!abaLista) return;
-    var n = lista().length, b = abaLista.querySelector('.aba-badge');
+    var n = (produtos ? listaValida() : lista()).length, b = abaLista.querySelector('.aba-badge');
     if (!n) { if (b) b.remove(); abaLista.removeAttribute('aria-label'); return; }
     if (!b) { b = el('span', { class: 'aba-badge', 'aria-hidden': 'true' }); abaLista.appendChild(b); }
     b.textContent = n > 99 ? '99+' : String(n);
@@ -382,6 +390,7 @@
       .then(function (r) {
         indice = r[0]; produtos = r[1];
         produtos.forEach(function (p, i) { porCodigo[p[0].toUpperCase()] = i; });
+        pintarBadgeLista(); /* agora o contador da aba conta só as peças que existem no catálogo, como a tela Minha lista */
         if (navigator.onLine !== false) ls('mg-dados-em', hojeIso()); /* "dados guardados em …" do aviso de sem conexão */
         pintarOffline();
         dadosImagens(); /* imagens.json (128 KB) só depois: no 3G ele não disputa a banda com produtos.json (contagens do Início mais cedo) */
@@ -1993,7 +2002,8 @@
       folhaProvedor = function () {
         var vis = painel.visiveis(), f = painel.filtro();
         if (!vis.length) return null;
-        var hashFolha = hashVeiculo({ marca: marca, modelo: modelo, ano: ano, motor: motor, linha: f }) + (cil ? '&cil=' + cil.toFixed(1) : '');
+        var hashFolha = hashVeiculo({ marca: marca, modelo: modelo, ano: ano, motor: motor, linha: f });
+        if (cil) hashFolha += (hashFolha.indexOf('?') >= 0 ? '&' : '?') + 'cil=' + cil.toFixed(1); /* veio da placa sem motor nem filtro: "?cil=", não "&cil=" */
         return {
           titulo: 'Peças MG para ' + titulo + (motor ? ' ' + motor : '') + (f ? ' · ' + LINHA_POR_ID[f].nome : ''),
           sub: plural(vis.length, 'peça', 'peças') + (motor ? '' : ' · todos os motores'),
@@ -2338,7 +2348,9 @@
     var mais = el('button', { type: 'button', class: 'qtd-btn', 'aria-label': 'Uma unidade a mais de ' + p[0], text: '+' });
     var num = el('input', { type: 'number', class: 'qtd-num', inputmode: 'numeric', min: '1', max: String(QTD_MAX), step: '1', value: String(x.qtd), 'aria-label': 'Quantidade de ' + p[0] });
     function aplicar(q) {
-      q = qtdValida(q); definirQtdLista(p[0], q); num.value = String(q);
+      q = qtdValida(q);
+      if (!definirQtdLista(p[0], q)) { toast(MSG_NAO_GUARDOU); var g = naLista(p[0]); q = g ? g.qtd : x.qtd; }
+      num.value = String(q);
       var ativo = document.activeElement;
       menos.disabled = q <= 1; mais.disabled = q >= QTD_MAX;
       if ((ativo === menos && menos.disabled) || (ativo === mais && mais.disabled)) num.focus(); /* o botão que desativou não fica com o foco perdido */
@@ -2389,13 +2401,16 @@
       btnApagar.addEventListener('click', function () { limparLista(); toast('Lista apagada'); montar(true); });
       var ul = el('ul', { class: 'lista lista-itens' });
       function remover(c, li) {
-        var r = removerLista(c); if (!r) return;
+        var r = removerLista(c); if (!r) { if (naLista(c)) toast(MSG_NAO_GUARDOU); return; }
         var prox = li.nextElementSibling || li.previousElementSibling;
         li.remove();
         if (!listaValida().length) montar(true);
         else { atualizar(); var f = prox ? prox.querySelector('.item-remover') : btnZap; if (f) f.focus(); }
         toast(c + ' removida da lista', { texto: 'Desfazer', aoTocar: function () {
-          devolverLista(r); montar();
+          devolverLista(r);
+          /* já em outra tela: só devolve a peça (remontar aqui trocaria a folha de impressão da tela aberta pela da lista) */
+          if (!node.isConnected) { toast(c + ' de volta à lista'); return; }
+          montar();
           var alvo = null; Array.prototype.forEach.call(res.querySelectorAll('.lista-item'), function (n) { if (n.getAttribute('data-cod') === c) alvo = n; });
           if (alvo) alvo.querySelector('.item-remover').focus();
         } });
@@ -2651,6 +2666,10 @@
     idTela = idDaEntrada(); rolagemAlvo = rolagens[idTela] || 0; /* entrada já visitada (voltar/avançar): abre onde estava */
     var r = rota();
     pintarBadgeLista(); /* a lista pode ter mudado fora deste código (outra aba do navegador): o contador da aba acompanha */
+    /* toast cujo link leva à tela que acabou de abrir (ex.: "Lista: 2 un. · Ver lista" e a pessoa tocou na aba Lista): some,
+       em vez de ficar 6 s cobrindo a lista com um link para ela mesma */
+    var acaoToast = toastEl && toastEl.querySelector('a.toast-acao');
+    if (acaoToast && acaoToast.getAttribute('href') === location.hash) { clearTimeout(toastTimer); toastEl.hidden = true; toastEl.textContent = ''; toastEl.classList.remove('com-acao'); }
     /* no Início já existe o cartão "Instale o app": a faixa flutuante de instalar fica só nas outras telas (CSS .rota-inicio) */
     document.body.classList.toggle('rota-inicio', r.nome === '');
     document.body.classList.toggle('rota-instalar', r.nome === 'instalar'); /* a tela Instalar já tem o botão: a faixa flutuante some nela (CSS) */

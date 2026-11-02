@@ -31,7 +31,7 @@ Guia curto para o Filipe. Tudo o que está aqui foi testado em 02/11/2026.
   fica exatamente como antes. O acerto de nomes de peça depende do serviço do navegador; a busca por texto já tolera
   erros. Sem permissão do microfone, sem fala ou sem internet, o app avisa e volta ao campo. Código: `vozDisponivel`,
   `normalizarVoz` e `ligarVoz` em `app.js`.
-- **Etiquetas com QR para a prateleira** — DESLIGADAS desde 02/11 (config.js `etiquetas: false`; o Filipe quer conversar antes, porque a MG já tem etiquetas padrão; o código fica guardado e volta com `etiquetas: true`) (botão "Etiquetas" na Minha lista, tela `#/etiquetas`; na ficha, o link "Etiqueta
+- **Etiquetas com QR para a prateleira** — DESLIGADAS desde 02/11 (config.js `etiquetas: false`; o Filipe quer conversar antes, porque a MG já tem etiquetas padrão; o código fica guardado e volta com `etiquetas: true`; ao religar, devolva as etiquetas ao texto de privacidade.html, "Preferências" e "Compartilhar e imprimir", e a captura 6 da ficha da Play) (botão "Etiquetas" na Minha lista, tela `#/etiquetas`; na ficha, o link "Etiqueta
   desta peça"): folha A4 de etiquetas adesivas com o logo, o código MG em destaque, o nome, a linha e um QR code que abre a
   ficha da peça no app (`p/MG001.html`). Modelos: Pimaco A4360 (63,5 × 38,1 mm, 21 por folha), A4362 (99 × 33,9 mm, 16),
   A4356 (63,5 × 25,4 mm, 33), A4351 (38,2 × 21,2 mm, 65) e "Grade simples 3 × 8" (63 × 33 mm com linha de corte, para papel
@@ -95,8 +95,8 @@ git push origin main
 ## 4. Como mudar a versão
 A versão tem que mudar a cada publicação, senão o celular continua com os arquivos antigos. São dois lugares, com
 o mesmo texto (formato ano.mês.dia-número):
-- `config.js` → linha `versao: '2026.11.02-31'`
-- `sw.js` → linha `var VERSAO = '2026.11.02-31';`
+- `config.js` → linha `versao: '2026.11.02-32'`
+- `sw.js` → linha `var VERSAO = '2026.11.02-32';`
 Se os dois ficarem diferentes, o teste do item 5 acusa.
 
 ## 5. Como rodar o teste
@@ -106,7 +106,7 @@ Precisa do Node.js e do Playwright com o Chromium (uma vez só: `npm install -g 
 node teste/fumaca.js
 ```
 Em uns 25 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, Minha lista, Imprimir / PDF, etiquetas, busca por voz, compartilhar,
-instalar, versão, uso sem internet) e termina com `220/220 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
+instalar, versão, uso sem internet) e termina com `226/226 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
 Para guardar capturas de tela: `node teste/fumaca.js --capturas pasta_das_capturas`.
 
 ## 6. Onde estão as regras
