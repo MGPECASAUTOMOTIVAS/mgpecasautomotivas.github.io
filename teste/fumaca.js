@@ -418,7 +418,7 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await page.evaluate(function () { localStorage.setItem('mg-lista', JSON.stringify([{ codigo: 'MG001', qtd: 2, adicionadoEm: '2026-11-02T15:00:00.000Z' }, { codigo: 'MG076', qtd: 1, adicionadoEm: '2026-11-02T15:01:00.000Z' }, { codigo: 'MG1903', qtd: 4, adicionadoEm: '2026-11-02T15:02:00.000Z' }])); window.__imprimiu = 0; });
   await ir(page, '#/lista', '.lista-acoes .btn-imprimir');
   var btnImp = await page.evaluate(function () { var b = document.querySelector('#conteudo .lista-acoes .btn-imprimir'), r = b.getBoundingClientRect(); return { h: r.height, w: r.width, txt: b.textContent.trim(), svg: !!b.querySelector('svg'), tipo: b.type, folha: !!document.getElementById('impressao'), irmaos: b.parentNode.querySelectorAll('.btn').length }; });
-  ok(btnImp.h >= 44 && btnImp.w >= 44 && btnImp.txt === 'Imprimir / PDF' && btnImp.svg && btnImp.tipo === 'button' && btnImp.irmaos === 3 && !btnImp.folha, 'Minha lista: botão "Imprimir / PDF" com ícone e 44 px junto de WhatsApp/Copiar; sem folha antes do toque');
+  ok(btnImp.h >= 44 && btnImp.w >= 44 && btnImp.txt === 'Imprimir / PDF' && btnImp.svg && btnImp.tipo === 'button' && btnImp.irmaos === 4 && !btnImp.folha, 'Minha lista: botão "Imprimir / PDF" com ícone e 44 px junto de WhatsApp/Copiar/Etiquetas; sem folha antes do toque');
   function lerFolha() {
     return page.evaluate(function () {
       var s = document.getElementById('impressao'); if (!s) return null;
@@ -494,6 +494,94 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   ok(ctrlP && await page.evaluate(function () { return !document.getElementById('impressao') && !document.body.classList.contains('imprimindo'); }), 'Ctrl+P: beforeprint monta a folha da tela e afterprint tira');
   await page.evaluate(function () { localStorage.removeItem('mg-lista'); });
 
+  /* ---------- etiquetas com QR para a prateleira (#/etiquetas): modelos, prévia, quantidade, medidas em mm, QR, folha de impressão ---------- */
+  console.log('\nEtiquetas com QR (#/etiquetas)');
+  var appJs = fs.readFileSync(path.join(APP, 'app.js'), 'utf8'), appCss = fs.readFileSync(path.join(APP, 'app.css'), 'utf8');
+  ok(/id: 'a4360'[^\n]*w: 63\.5, h: 38\.1, col: 3, lin: 7, mt: 15\.2, ml: 7\.2, gh: 2\.55/.test(appJs) && /id: 'a4362'[^\n]*w: 99, h: 33\.9, col: 2, lin: 8, mt: 12\.9, ml: 4\.7, gh: 2\.6/.test(appJs) && /id: 'a4356'[^\n]*w: 63\.5, h: 25\.4, col: 3, lin: 11, mt: 8\.8, ml: 7\.2/.test(appJs) && /id: 'a4351'[^\n]*w: 38\.2, h: 21\.2, col: 5, lin: 13, mt: 10\.7, ml: 4\.5, gh: 2\.5/.test(appJs) && /id: 'grade38'[^\n]*w: 63, h: 33, col: 3, lin: 8/.test(appJs) && /pimaco\.com\.br/.test(appJs), 'app.js: 4 modelos Pimaco A4 (A4360, A4362, A4356, A4351) com medidas, contagem e margens em mm, mais a grade 3 × 8, e a fonte citada no comentário');
+  ok(/\.etq-folha \{ position: relative; width: 210mm; height: 297mm/.test(appCss) && /\.etq \{\s*position: absolute; box-sizing: border-box/.test(appCss) && /break-inside: avoid; page-break-inside: avoid;\s*\}\s*\.etq-corte/.test(appCss) && /\.imp-etiquetas \.etq-folha \{ break-after: page/.test(appCss), 'app.css: folha de 210 × 297 mm, etiqueta posicionada em mm com break-inside: avoid e quebra de página por folha');
+  await page.evaluate(function () { localStorage.setItem('mg-lista', JSON.stringify([{ codigo: 'MG001', qtd: 2 }, { codigo: 'MG076', qtd: 1 }, { codigo: 'MG1903', qtd: 4 }, { codigo: 'MG-KV0300', qtd: 1 }])); localStorage.removeItem('mg-etiqueta-modelo'); window.__imprimiu = 0; });
+  await ir(page, '#/lista', '.lista-acoes .btn-etiquetas');
+  var bEtq = await page.evaluate(function () { var b = document.querySelector('#conteudo .btn-etiquetas'), r = b.getBoundingClientRect(); return { h: r.height, href: b.getAttribute('href'), txt: b.textContent.trim(), svg: !!b.querySelector('svg') }; });
+  ok(bEtq.h >= 44 && bEtq.href === '#/etiquetas' && bEtq.txt === 'Etiquetas' && bEtq.svg, 'Minha lista: botão "Etiquetas" (44 px, ícone) junto de Imprimir / PDF → #/etiquetas');
+  await page.click('#conteudo .btn-etiquetas'); await page.waitForSelector('#conteudo > :not([data-velho]) .etq-folha-previa .etq');
+  await page.waitForTimeout(100);
+  function lerTelaEtq() {
+    return page.evaluate(function () {
+      var sel = document.getElementById('etq-modelo'), f = document.querySelector('#conteudo .etq-folha-previa .etq-folha'), e = f.querySelectorAll('.etq'), am = document.querySelector('#conteudo .etq-amostra .etq');
+      function pos(i) { return e[i] ? [e[i].style.left, e[i].style.top, e[i].style.width, e[i].style.height] : null; }
+      return { h1: document.querySelector('.topo-titulo').textContent, sub: document.querySelector('.topo-sub') ? document.querySelector('.topo-sub').textContent : '', titulo: document.title, voltar: document.querySelector('.topo a.voltar, .topo .voltar') ? document.querySelector('.topo a.voltar, .topo .voltar').getAttribute('href') : '',
+        ops: Array.prototype.map.call(sel.options, function (o) { return o.value + '=' + o.textContent; }), selH: sel.getBoundingClientRect().height, selVal: sel.value,
+        seg: Array.prototype.map.call(document.querySelectorAll('#conteudo .segmentos button'), function (b) { return b.textContent + ':' + b.getAttribute('aria-pressed') + ':' + Math.round(b.getBoundingClientRect().height); }),
+        qtd: document.getElementById('etq-qtd') ? document.getElementById('etq-qtd').value : null, pular: document.getElementById('etq-pular').value, pularMax: document.getElementById('etq-pular').max, pularH: document.getElementById('etq-pular').getBoundingClientRect().height,
+        btn: !!document.querySelector('#conteudo .etq-opcoes .btn-imprimir'), ajuda: document.querySelector('#conteudo .etq-opcoes .ajuda:last-child').textContent, resumo: document.querySelector('#conteudo .etq-resumo').textContent,
+        n: e.length, corte: f.classList.contains('etq-corte'), borda: getComputedStyle(e[0]).borderTopWidth, e1: pos(0), e2: pos(1), e4: pos(3), e6: pos(5), cods: Array.prototype.map.call(e, function (x) { return x.querySelector('.etq-cod').textContent; }).join(','),
+        amostra: { cod: am.querySelector('.etq-cod').textContent, nome: am.querySelector('.etq-nome').textContent, linha: am.querySelector('.etq-linha') ? am.querySelector('.etq-linha').textContent : null, logo: am.querySelector('.etq-logo').getAttribute('src'), qr: am.querySelector('.etq-qr svg').getAttribute('aria-label'), w: am.getBoundingClientRect().width, h: am.getBoundingClientRect().height, qrW: am.querySelector('.etq-qr').getBoundingClientRect().width, cor: getComputedStyle(am).color, fundo: getComputedStyle(am).backgroundColor },
+        texto: document.getElementById('conteudo').textContent, escala: f.style.transform, caixa: document.querySelector('#conteudo .etq-folha-previa').getBoundingClientRect().width, folhaVis: f.getBoundingClientRect().width, folhaPx: f.offsetWidth };
+    });
+  }
+  var tE = await lerTelaEtq(), MMPX = 96 / 25.4;
+  ok(tE.h1 === 'EtiquetasMinha lista' && tE.sub === 'Minha lista' && tE.titulo === 'Etiquetas · MG Peças', 'tela Etiquetas (título "Etiquetas", subtítulo "Minha lista") (' + tE.h1 + ' / ' + tE.titulo + ')');
+  ok(tE.ops.length === 5 && /^a4360=Pimaco A4360 · 63,5 × 38,1 mm · 21 por folha \(3 × 7\)$/.test(tE.ops[0]) && /^a4362=Pimaco A4362 · 99 × 33,9 mm · 16 por folha \(2 × 8\)$/.test(tE.ops[1]) && /^a4356=Pimaco A4356 · 63,5 × 25,4 mm · 33 por folha \(3 × 11\)$/.test(tE.ops[2]) && /^a4351=Pimaco A4351 · 38,2 × 21,2 mm · 65 por folha \(5 × 13\)$/.test(tE.ops[3]) && /^grade38=Grade simples 3 × 8 · 63 × 33 mm · 24 por folha/.test(tE.ops[4]) && tE.selVal === 'a4360' && tE.selH >= 44, 'seletor de modelo com os 4 Pimaco A4 e a grade simples (medida, contagem, colunas × linhas), A4360 por padrão, 44 px');
+  ok(tE.seg.join('|') === 'Uma por peça:true:44|Uma por unidade:false:44' && tE.pular === '0' && tE.pularMax === '20' && tE.pularH >= 44 && tE.btn && /100% \/ tamanho real, sem ajustar à página, papel A4/.test(tE.ajuda), 'opções: "Uma por peça / Uma por unidade" (44 px), "Pular etiquetas já usadas" (máx. 20 no A4360), Imprimir / PDF e aviso "100% / tamanho real"');
+  ok(tE.resumo === '4 etiquetas · 1 folha A4 · Pimaco A4360' && tE.n === 4 && tE.cods === 'MG001,MG076,MG1903,MG-KV0300', 'uma etiqueta por peça: 4 etiquetas da lista na 1ª folha, na ordem da lista');
+  ok(tE.e1.join(',') === '7.2mm,15.2mm,63.5mm,38.1mm' && tE.e2.join(',') === '73.25mm,15.2mm,63.5mm,38.1mm' && tE.e4.join(',') === '7.2mm,53.3mm,63.5mm,38.1mm', 'A4360: etiquetas de 63,5 × 38,1 mm nas posições do modelo (margens 7,2/15,2 mm, passo 66,05 × 38,1 mm) (' + tE.e1 + ' / ' + tE.e2 + ' / ' + tE.e4 + ')');
+  ok(tE.amostra.cod === 'MG001' && tE.amostra.nome === 'Mangueira do Filtro de Ar' && tE.amostra.linha === 'Mangueiras do Filtro de Ar' && tE.amostra.logo === 'icones/logo-mg.png' && tE.amostra.qr === 'QR code: https://mgpecasautomotivas.github.io/p/MG001.html', 'etiqueta: logo original, código, nome, linha e QR da prévia p/MG001.html (qr.js)');
+  ok(Math.abs(tE.amostra.w - 63.5 * MMPX) < 1.5 && Math.abs(tE.amostra.h - 38.1 * MMPX) < 1.5 && Math.abs(tE.amostra.qrW - 30 * MMPX) < 1.5 && tE.amostra.cor === 'rgb(0, 0, 0)' && tE.amostra.fundo === 'rgb(255, 255, 255)', 'prévia de uma etiqueta em tamanho real (240 × 144 px = 63,5 × 38,1 mm, QR de 30 mm), preto no branco (' + Math.round(tE.amostra.w) + '×' + Math.round(tE.amostra.h) + ')');
+  ok(Math.abs(tE.folhaPx - 210 * MMPX) < 1.5 && /^scale\(/.test(tE.escala) && tE.folhaVis <= tE.caixa + 1, 'prévia da 1ª folha: página de 210 mm encolhida para caber na tela (' + Math.round(tE.folhaVis) + ' de ' + Math.round(tE.caixa) + ' px)');
+  ok(!PROIBIDO.test(tE.texto), 'tela de etiquetas sem valores, sem palavras de venda e sem contato');
+  await page.click('#conteudo .segmentos button:nth-child(2)'); await page.waitForTimeout(100);
+  var tU = await lerTelaEtq();
+  ok(tU.n === 8 && tU.resumo === '8 etiquetas · 1 folha A4 · Pimaco A4360' && tU.cods === 'MG001,MG001,MG076,MG1903,MG1903,MG1903,MG1903,MG-KV0300' && tU.seg.join('|') === 'Uma por peça:false:44|Uma por unidade:true:44', 'uma etiqueta por unidade: 8 etiquetas (2 + 1 + 4 + 1), repetidas na ordem da lista');
+  await page.selectOption('#etq-modelo', 'a4351'); await page.waitForTimeout(100);
+  var tP = await lerTelaEtq();
+  ok(tP.e1.join(',') === '4.5mm,10.7mm,38.2mm,21.2mm' && tP.e6.join(',') === '4.5mm,31.9mm,38.2mm,21.2mm' && tP.e2[0] === '45.2mm' && tP.pularMax === '64' && tP.amostra.linha === null && Math.abs(tP.amostra.qrW - 17.5 * MMPX) < 1.5, 'A4351: 38,2 × 21,2 mm, 5 colunas (passo 40,7 mm), sem a linha de produtos, QR de 17,5 mm, pular até 64');
+  igual(await page.evaluate(function () { return localStorage.getItem('mg-etiqueta-modelo'); }), 'a4351', 'modelo escolhido lembrado no aparelho (mg-etiqueta-modelo)');
+  await page.fill('#etq-pular', '3'); await page.waitForTimeout(100);
+  var tS = await lerTelaEtq();
+  ok(tS.e1[0] === '126.6mm' && tS.e1[1] === '10.7mm' && /pulando 3 etiquetas na 1ª folha/.test(tS.resumo) && tS.n === 8, 'pular 3: a 1ª etiqueta vai para a 4ª posição da folha (' + tS.e1[0] + ')');
+  await page.click('#conteudo .etq-opcoes .btn-imprimir');
+  var folhaEtq = await page.evaluate(function () {
+    var s = document.getElementById('impressao'), e = s ? s.querySelectorAll('.etq') : [];
+    return { print: window.__imprimiu, classe: document.body.classList.contains('imprimindo'), etiquetas: s && s.classList.contains('imp-etiquetas'), folhas: s ? s.querySelectorAll('.etq-folha').length : 0, n: e.length, cab: s ? !!s.querySelector('.imp-cab, .imp-rodape, h1') : null, e1: e[0] ? e[0].style.left + ',' + e[0].style.top : '', pagina: Array.prototype.some.call(document.head.querySelectorAll('style'), function (x) { return /@page\s*\{\s*size: A4 portrait; margin: 0;\s*\}/.test(x.textContent); }), titulo: document.title, qr: e[0] && e[0].querySelector('.etq-qr svg').getAttribute('aria-label'), texto: s ? s.textContent : '' };
+  });
+  ok(folhaEtq.print === 1 && folhaEtq.classe && folhaEtq.etiquetas && folhaEtq.folhas === 1 && folhaEtq.n === 8 && !folhaEtq.cab && folhaEtq.e1 === '126.6mm,10.7mm', 'Imprimir / PDF: folha #impressao.imp-etiquetas só com a página de etiquetas (sem cabeçalho nem rodapé), 8 etiquetas a partir da 4ª posição, window.print() uma vez');
+  ok(folhaEtq.pagina && folhaEtq.titulo === 'Etiquetas MG · MG Peças' && folhaEtq.qr === 'QR code: https://mgpecasautomotivas.github.io/p/MG001.html' && !PROIBIDO.test(folhaEtq.texto), '@page A4 sem margem injetado junto com a folha, nome do PDF "Etiquetas MG", QR com o link da ficha, sem valores');
+  await page.emulateMedia({ media: 'print' });
+  var impEtq = await page.evaluate(function () { var s = document.getElementById('impressao'), f = s.querySelector('.etq-folha'), e = s.querySelector('.etq'), cf = getComputedStyle(f), ce = getComputedStyle(e); return { d: getComputedStyle(s).display, w: f.getBoundingClientRect().width, h: f.getBoundingClientRect().height, quebra: cf.breakAfter, ew: e.getBoundingClientRect().width, eh: e.getBoundingClientRect().height, cor: ce.color, fundo: ce.backgroundColor, dentro: ce.breakInside, conteudo: getComputedStyle(document.getElementById('conteudo')).display }; });
+  ok(impEtq.d === 'block' && Math.abs(impEtq.w - 210 * MMPX) < 1.5 && Math.abs(impEtq.h - 297 * MMPX) < 1.5 && impEtq.quebra === 'auto' && impEtq.conteudo === 'none', 'na impressão: página de 210 × 297 mm (a última sem quebra depois), e a tela some (' + Math.round(impEtq.w) + '×' + Math.round(impEtq.h) + ' px)');
+  ok(Math.abs(impEtq.ew - 38.2 * MMPX) < 1.5 && Math.abs(impEtq.eh - 21.2 * MMPX) < 1.5 && impEtq.cor === 'rgb(0, 0, 0)' && impEtq.fundo === 'rgb(255, 255, 255)' && impEtq.dentro === 'avoid', 'na impressão: etiqueta com 38,2 × 21,2 mm fixos, preto no branco, break-inside: avoid');
+  await page.emulateMedia({ media: 'screen' });
+  await page.evaluate(function () { window.dispatchEvent(new Event('afterprint')); });
+  ok(await page.evaluate(function () { return !document.getElementById('impressao') && !document.body.classList.contains('imprimindo') && !Array.prototype.some.call(document.head.querySelectorAll('style'), function (x) { return /@page/.test(x.textContent); }) && document.title === 'Etiquetas · MG Peças'; }), 'afterprint tira a folha, o @page e devolve o título');
+  /* duas folhas: pular 64 no A4351 (65 por folha) empurra 7 etiquetas para a 2ª página; a 1ª página quebra depois */
+  await page.fill('#etq-pular', '64'); await page.waitForTimeout(100);
+  await page.click('#conteudo .etq-opcoes .btn-imprimir'); await page.emulateMedia({ media: 'print' });
+  var duas = await page.evaluate(function () { var s = document.getElementById('impressao'), f = s.querySelectorAll('.etq-folha'); return { folhas: f.length, n1: f[0].querySelectorAll('.etq').length, n2: f[1] ? f[1].querySelectorAll('.etq').length : 0, q1: getComputedStyle(f[0]).breakAfter, q2: f[1] ? getComputedStyle(f[1]).breakAfter : '', p2: f[1] ? f[1].querySelector('.etq').style.left + ',' + f[1].querySelector('.etq').style.top : '', resumo: document.querySelector('#conteudo .etq-resumo').textContent }; });
+  await page.emulateMedia({ media: 'screen' }); await page.evaluate(function () { window.dispatchEvent(new Event('afterprint')); });
+  ok(duas.folhas === 2 && duas.n1 === 1 && duas.n2 === 7 && duas.q1 === 'page' && duas.q2 === 'auto' && duas.p2 === '4.5mm,10.7mm' && /8 etiquetas · 2 folhas A4/.test(duas.resumo), 'pular 64 no A4351: 2 folhas (1 + 7 etiquetas), quebra de página depois da 1ª, 2ª folha começa na 1ª posição (' + JSON.stringify(duas) + ')');
+  await page.fill('#etq-pular', '0'); await page.selectOption('#etq-modelo', 'grade38'); await page.waitForTimeout(100);
+  var tG = await lerTelaEtq();
+  ok(tG.corte && parseFloat(tG.borda) > 0 && tG.e1.join(',') === '9.5mm,13mm,63mm,33mm' && tG.e4.join(',') === '9.5mm,47mm,63mm,33mm' && tG.pularMax === '23', 'Grade simples 3 × 8: 63 × 33 mm com linha de corte, passo 64 × 34 mm, 24 por folha (' + tG.corte + ' ' + tG.borda + ' ' + tG.e1 + ' / ' + tG.e4 + ' / ' + tG.pularMax + ')');
+  /* ficha → "Etiqueta desta peça" (link discreto, a grade de 4 botões não muda) → #/etiquetas?peca=MG001 com campo de quantidade */
+  await ir(page, '#/peca/MG001', '.link-etiqueta');
+  var lkE = await page.evaluate(function () { var a = document.querySelector('#conteudo .link-etiqueta'), r = a.getBoundingClientRect(), g = document.querySelector('#conteudo .acoes-peca').getBoundingClientRect(); return { h: r.height, href: a.getAttribute('href'), txt: a.textContent.trim(), abaixo: r.top >= g.bottom - 1, botoes: document.querySelectorAll('#conteudo .acoes-peca .btn').length, svg: !!a.querySelector('svg') }; });
+  ok(lkE.h >= 44 && lkE.href === '#/etiquetas?peca=MG001' && lkE.txt === 'Etiqueta desta peça' && lkE.abaixo && lkE.botoes === 4 && lkE.svg, 'ficha: link "Etiqueta desta peça" (44 px) abaixo dos 4 botões, que continuam 4');
+  await page.click('#conteudo .link-etiqueta'); await page.waitForSelector('#conteudo > :not([data-velho]) .etq-folha-previa .etq'); await page.waitForTimeout(100);
+  var tC = await lerTelaEtq();
+  ok(tC.sub === 'Peça MG001' && tC.qtd === '1' && !tC.seg.length && tC.n === 1 && tC.cods === 'MG001' && tC.selVal === 'grade38', 'etiqueta de uma peça: subtítulo "Peça MG001", campo "Quantidade de etiquetas" = 1 (sem por peça/por unidade), 1 etiqueta, modelo lembrado');
+  await page.fill('#etq-qtd', '3'); await page.waitForTimeout(100);
+  var tC3 = await lerTelaEtq();
+  ok(tC3.n === 3 && tC3.cods === 'MG001,MG001,MG001' && tC3.resumo.indexOf('3 etiquetas · 1 folha A4') === 0, 'quantidade 3: três etiquetas da mesma peça');
+  await page.evaluate(function () { window.__imprimiu = 0; });
+  await page.click('#conteudo .etq-opcoes .btn-imprimir');
+  ok(await page.evaluate(function () { var s = document.getElementById('impressao'); return window.__imprimiu === 1 && s && s.querySelectorAll('.etq').length === 3 && document.title === 'Etiquetas MG MG001 · MG Peças'; }), 'Imprimir / PDF da peça: 3 etiquetas, nome do PDF "Etiquetas MG MG001"');
+  await page.evaluate(function () { window.dispatchEvent(new Event('afterprint')); });
+  await ir(page, '#/etiquetas?peca=XX999', '.vazio');
+  ok(/Peça XX999 não encontrada/.test(await page.textContent('#conteudo .vazio')), 'código desconhecido: estado vazio "Peça XX999 não encontrada"');
+  await page.evaluate(function () { localStorage.removeItem('mg-lista'); localStorage.removeItem('mg-etiqueta-modelo'); });
+  await ir(page, '#/etiquetas', '.vazio');
+  ok(/Lista vazia/.test(await page.textContent('#conteudo .vazio')) && !!(await page.$('#conteudo .vazio a.btn')), 'lista vazia: estado vazio explica como adicionar peças, com "Buscar peça"');
+
   console.log('\nLinhas, Instalar, Sobre');
   await ir(page, '#/linhas', '.grade-linhas .linha-card');
   await page.waitForFunction(function () { return !/…/.test(document.querySelector('#conteudo .grade-linhas .cont').textContent); });
@@ -555,7 +643,7 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   console.log('\nLargura 360');
   var p360 = await ctx.newPage(); colher(p360, erros); await p360.setViewportSize({ width: 360, height: 740 });
   await page.evaluate(function () { localStorage.setItem('mg-lista', JSON.stringify([{ codigo: 'MG001', qtd: 2, adicionadoEm: '2026-11-02T15:00:00.000Z' }, { codigo: 'MG076', qtd: 1, adicionadoEm: '2026-11-02T15:01:00.000Z' }])); }); /* lista com itens para as telas 360 e paisagem */
-  var telas = [['#/', '.secao-busca .entrada'], ['#/busca?q=mangueira%20gol', '.painel-res .res-cont b'], ['#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.painel-res .res-cont b'], ['#/peca/MG001', 'table.tabela'], ['#/lista', '.lista-item'], ['#/instalar', '.qr-caixa svg'], ['#/sobre', '.versao b']];
+  var telas = [['#/', '.secao-busca .entrada'], ['#/busca?q=mangueira%20gol', '.painel-res .res-cont b'], ['#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.painel-res .res-cont b'], ['#/peca/MG001', 'table.tabela'], ['#/lista', '.lista-item'], ['#/etiquetas', '.etq-folha-previa .etq'], ['#/instalar', '.qr-caixa svg'], ['#/sobre', '.versao b']];
   await p360.goto(base + '#/'); await p360.waitForSelector('.secao-busca .entrada');
   for (var k = 0; k < telas.length; k++) {
     if (k) await ir(p360, telas[k][0], telas[k][1]);

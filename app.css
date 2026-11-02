@@ -704,6 +704,38 @@ body:not(.rota-inicio):not(.rota-instalar):has(.faixa-instalar:not([hidden])) .t
   .zoom-dica { bottom: calc(var(--sa-fundo) + 10px); }
 }
 
+/* ---------- etiquetas com QR para a prateleira (#/etiquetas) ----------
+   A etiqueta (.etq) e a folha (.etq-folha, 210 × 297 mm) são desenhadas em mm, com as medidas do modelo vindas de app.js
+   (variáveis --etq-*); na tela a prévia é a mesma folha encolhida por transform, na impressão ela sai em tamanho real
+   (@page sem margem, injetado por app.js só enquanto a folha de etiquetas existe). Preto no branco nos dois temas. */
+.etq-folha { position: relative; width: 210mm; height: 297mm; background: #fff; color: #000; overflow: hidden; box-sizing: border-box; }
+.etq {
+  position: absolute; box-sizing: border-box; display: flex; align-items: center; gap: 1.5mm; padding: var(--etq-pad, 2mm); overflow: hidden;
+  background: #fff; color: #000; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; line-height: 1.15; text-align: left;
+  break-inside: avoid; page-break-inside: avoid;
+}
+.etq-corte .etq { border: .2mm solid #999; }
+.etq-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: .8mm; }
+.etq-logo { height: var(--etq-logo, 5mm); width: auto; display: block; }
+.etq-cod { font-size: var(--etq-cod, 14pt); font-weight: 800; letter-spacing: .01em; line-height: 1; white-space: nowrap; max-width: 100%; overflow: hidden; }
+.etq-nome { font-size: var(--etq-nome, 8pt); font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; max-width: 100%; }
+.etq-linha { font-size: var(--etq-linha, 6.5pt); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.etq-qr { flex: 0 0 auto; width: var(--etq-qr, 30mm); height: var(--etq-qr, 30mm); }
+.etq-qr svg { display: block; width: 100%; height: 100%; }
+/* tela: prévia de uma etiqueta e da 1ª folha (encolhidas para caber), campos numéricos e segmentos largos */
+.etq-amostra, .etq-folha-previa { position: relative; overflow: hidden; width: 100%; }
+.etq-amostra-caixa, .etq-folha-previa .etq-folha { transform-origin: 0 0; }
+.etq-amostra-caixa { display: inline-block; box-shadow: 0 0 0 1px var(--borda); border-radius: 2px; }
+.etq-amostra .etq { position: relative; }
+.etq-folha-previa .etq-folha { box-shadow: 0 0 0 1px var(--borda), 0 2px 12px rgba(0,0,0,.18); }
+.etq-folha-previa .etq { outline: 1px dashed #c4c4c4; outline-offset: -1px; }
+.etq-folha-previa .etq-corte .etq { outline: none; }
+.etq-resumo { margin: 6px 0 0; font-size: .9375rem; color: var(--texto-2); }
+.etq-previa .status { margin-top: 10px; }
+.entrada-num { max-width: 160px; }
+.segmentos-largo { display: flex; width: 100%; }
+.link-etiqueta { margin: 2px 0 -8px; }
+
 /* ---------- imprimir ou salvar em PDF ----------
    A folha (#impressao) existe só durante a impressão (app.js: montarFolha/limparFolha, body.imprimindo). Preto no branco,
    fontes do sistema, sem fundo colorido, igual nos dois temas; thead repetido a cada página e linhas sem cortar. A4 e Carta. */
@@ -748,4 +780,9 @@ body:not(.rota-inicio):not(.rota-instalar):has(.faixa-instalar:not([hidden])) .t
   .imp-rodape-txt { display: flex; flex-direction: column; gap: 1mm; min-width: 0; overflow-wrap: anywhere; }
   .imp-qr { flex: 0 0 auto; }
   .imp-qr svg { display: block; width: 24mm; height: 24mm; }
+  /* folha de etiquetas: cada .etq-folha é uma página A4 inteira (app.js injeta @page { size: A4; margin: 0 } junto com ela) */
+  body.imprimindo #impressao.imp-etiquetas { font: 10pt/1.15 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  .imp-etiquetas .etq-folha { break-after: page; page-break-after: always; }
+  .imp-etiquetas .etq-folha:last-child { break-after: auto; page-break-after: auto; }
+  .imp-etiquetas .etq { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }

@@ -20,6 +20,14 @@ Guia curto para o Filipe. Tudo o que está aqui foi testado em 02/11/2026.
   linha; ficha: foto, aplicação completa e números originais; veículo: código, nome, linha e aplicação de todas as peças, na
   ordem e com o filtro da tela) e um QR code do link. Sem valores nem contato. Ctrl+P no computador imprime a mesma folha.
   Tudo é montado no aparelho (CSS `@media print` em `app.css`, seção `#impressao` em `app.js`); nada vai para servidor.
+- **Etiquetas com QR para a prateleira** (botão "Etiquetas" na Minha lista, tela `#/etiquetas`; na ficha, o link "Etiqueta
+  desta peça"): folha A4 de etiquetas adesivas com o logo, o código MG em destaque, o nome, a linha e um QR code que abre a
+  ficha da peça no app (`p/MG001.html`). Modelos: Pimaco A4360 (63,5 × 38,1 mm, 21 por folha), A4362 (99 × 33,9 mm, 16),
+  A4356 (63,5 × 25,4 mm, 33), A4351 (38,2 × 21,2 mm, 65) e "Grade simples 3 × 8" (63 × 33 mm com linha de corte, para papel
+  comum). Etiquetas de outra marca com a mesma medida e a mesma contagem costumam ter o mesmo gabarito; a prévia mostra a
+  folha. Opções: uma etiqueta por peça ou por unidade da lista, pular as já usadas na 1ª folha. Na caixa de impressão escolha
+  **100% / tamanho real** (sem "ajustar à página") e papel A4; imprima antes em papel comum e sobreponha à folha adesiva.
+  Para mudar um modelo ou acrescentar outro: lista `ETIQUETA_MODELOS` em `app.js` (medidas em mm, com a fonte no comentário).
 - Endereço no ar: https://mgpecasautomotivas.github.io/
 - Os arquivos ficam em dois lugares:
   - **Repositório** `MGPECASAUTOMOTIVAS/mgpecasautomotivas.github.io` no GitHub (organização da MG) → a raiz dele é o que
@@ -76,8 +84,8 @@ git push origin main
 ## 4. Como mudar a versão
 A versão tem que mudar a cada publicação, senão o celular continua com os arquivos antigos. São dois lugares, com
 o mesmo texto (formato ano.mês.dia-número):
-- `config.js` → linha `versao: '2026.11.02-28'`
-- `sw.js` → linha `var VERSAO = '2026.11.02-28';`
+- `config.js` → linha `versao: '2026.11.02-29'`
+- `sw.js` → linha `var VERSAO = '2026.11.02-29';`
 Se os dois ficarem diferentes, o teste do item 5 acusa.
 
 ## 5. Como rodar o teste
@@ -86,8 +94,8 @@ Precisa do Node.js e do Playwright com o Chromium (uma vez só: `npm install -g 
 ```
 node teste/fumaca.js
 ```
-Em uns 20 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, Minha lista, Imprimir / PDF, compartilhar,
-instalar, versão, uso sem internet) e termina com `181/181 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
+Em uns 25 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, Minha lista, Imprimir / PDF, etiquetas, compartilhar,
+instalar, versão, uso sem internet) e termina com `211/211 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
 Para guardar capturas de tela: `node teste/fumaca.js --capturas pasta_das_capturas`.
 
 ## 6. Onde estão as regras

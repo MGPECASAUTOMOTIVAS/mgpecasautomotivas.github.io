@@ -15,7 +15,7 @@ index.html                  casca do app
 config.js                   configuração (MG_CONFIG: dadosBase, detalhesUrl, placaUrl, loja, versao) — único lugar a mudar;
                             lido pelo index.html e pelo service worker (importScripts), para o pré-cache usar os mesmos endereços
 app.css                     visual (azul MG #0b4ea2, Barlow / Barlow Condensed, temas claro e escuro, safe-area iPhone)
-app.js                      rotas (#/ #/placa #/busca #/veiculo/… #/linhas #/linha/<id> #/peca/<CÓDIGO> #/minhas #/lista #/sobre), busca, placa, instalação, impressão (folha #impressao montada só ao imprimir, CSS @media print)
+app.js                      rotas (#/ #/placa #/busca #/veiculo/… #/linhas #/linha/<id> #/peca/<CÓDIGO> #/minhas #/lista #/etiquetas #/sobre), busca, placa, instalação, impressão (folha #impressao montada só ao imprimir, CSS @media print), etiquetas com QR (ETIQUETA_MODELOS: folha A4 em mm)
 sw.js                       service worker: casca + catálogo (inclusive marcas/*.json) em cache; mudar VERSAO a cada publicação
 manifest.webmanifest        nome "MG Peças Automotivas", short_name "MG Peças", standalone, ícones 192/512 + maskable
 icones/                     gerados com Pillow só a partir do logo original nova_cara/banners/fonte/cut/logo_mg_original_rgba.png

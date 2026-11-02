@@ -2,6 +2,7 @@
    Vanilla JS, sem build. Rotas por hash: #/ #/placa #/busca #/busca?q=MG001 #/veiculo/Marca/Modelo/Ano
    #/linhas #/linha/<id> #/peca/<CÓDIGO> #/minhas #/lista ("Minha lista": códigos MG com quantidade, no aparelho) #/sobre
    #/instalar (QR code e passo a passo; carrega qr.js só nessa tela)
+   #/etiquetas e #/etiquetas?peca=<CÓDIGO> (etiquetas com QR para a prateleira: folha A4 em modelos Pimaco ou grade simples)
    Dados: indice.json, produtos.json, imagens.json, marcas/<marca>.json (mesmos do buscador do site) + detalhes.json (gerado para o app).
    Configuração: config.js (window.MG_CONFIG), carregado antes deste arquivo e também pelo service worker. */
 (function () {
@@ -83,13 +84,14 @@
      toque: no celular a caixa de impressão do navegador salva em PDF (no iPhone abre a folha de compartilhar/imprimir do
      sistema). Ctrl+P no computador monta a mesma folha (beforeprint). Nada sai do aparelho; a folha não traz valores nem
      contato: código, nome, linha, aplicação, números originais, data e um QR code (qr.js) do link do app ou da ficha. */
-  var folhaProvedor = null, folhaEl = null, tituloAntesFolha = null;
+  var folhaProvedor = null, folhaEl = null, tituloAntesFolha = null, estiloPagina = null;
   function qrImpressao(url) {
     try { if (window.MG_QR && url && url.length <= window.MG_QR.capacidade(10)) return window.MG_QR.svg(url, { margem: 2, largura: 96, alt: 'QR code: ' + url }); } catch (e) {}
     return '';
   }
-  /* o: { titulo, sub, corpo: [nós], url (link do QR e do rodapé) } */
+  /* o: { titulo, sub, corpo: [nós], url (link do QR e do rodapé) }; com o.etiquetas as páginas vão sozinhas (sem cabeçalho nem rodapé) */
   function folhaImpressao(o) {
+    if (o.etiquetas) return el('section', { id: 'impressao', class: 'imp-etiquetas', 'aria-hidden': 'true', lang: 'pt-BR' }, o.corpo || []);
     var url = o.url || urlApp(), qr = qrImpressao(url);
     var cab = el('header', { class: 'imp-cab' }, [
       el('img', { class: 'imp-logo', src: logoSrc(), alt: 'MG Peças Automotivas', width: '708', height: '267' }),
@@ -107,6 +109,7 @@
   }
   function limparFolha() {
     if (folhaEl) { folhaEl.remove(); folhaEl = null; }
+    if (estiloPagina) { estiloPagina.remove(); estiloPagina = null; }
     document.body.classList.remove('imprimindo');
     if (tituloAntesFolha != null) { document.title = tituloAntesFolha; tituloAntesFolha = null; }
   }
@@ -117,6 +120,8 @@
     if (!o) return null;
     limparFolha();
     folhaEl = folhaImpressao(o); document.body.appendChild(folhaEl); document.body.classList.add('imprimindo');
+    /* etiquetas: a folha é a própria página A4 (a posição de cada etiqueta já conta as margens do modelo), então a página sai sem margem */
+    if (o.etiquetas) { estiloPagina = el('style', { text: '@page { size: A4 portrait; margin: 0; }' }); document.head.appendChild(estiloPagina); }
     tituloAntesFolha = document.title; document.title = o.titulo + ' · MG Peças';
     return folhaEl;
   }
@@ -141,6 +146,67 @@
       el('thead', {}, [el('tr', {}, cabecalhos.map(function (h, i) { return el('th', { text: h, style: larguras && larguras[i] ? 'width:' + larguras[i] : null }); }))]),
       el('tbody', {}, linhas.map(function (l) { return el('tr', {}, l.map(function (c) { return typeof c === 'string' ? el('td', { text: c }) : el('td', { text: c.t, class: c.c || null }); })); }))
     ]);
+  }
+
+  /* ---------- etiquetas com QR para a prateleira ----------
+     A loja imprime uma folha A4 de etiquetas adesivas (código MG em destaque, nome, linha e um QR code que abre a ficha
+     p/<código>.html no app) para colar na prateleira ou na caixa: quem escaneia vê aplicação e números originais na hora.
+     Cada etiqueta é posicionada em mm (position: absolute) dentro de uma página de 210 × 297 mm sem margem (@page margin 0),
+     por isso a impressão tem de sair em 100% / tamanho real. Preto no branco, só dados reais, sem valores nem contato.
+     Modelos conferidos em 02/11/2026 (medida e quantidade por folha na página oficial de cada produto em pimaco.com.br;
+     margens e espaçamento dos gabaritos de impressão da Pimaco, como reproduzidos em templates/<modelo>.json da biblioteca
+     phppimaco, github.com/PronerInformatica/phppimaco; a soma margem + etiquetas + espaços fecha nos 210 × 297 mm da folha
+     e bate com os gabaritos Avery equivalentes L7160/L7162/L7651 do gLabels):
+       A4360  63,5 × 38,1 mm · 21 (3 × 7)  · margem superior 15,2 · lateral 7,2 · espaço horizontal 2,55 · vertical 0
+       A4362  99,0 × 33,9 mm · 16 (2 × 8)  · superior 12,9 · lateral 4,7 · horizontal 2,6 · vertical 0
+       A4356  63,5 × 25,4 mm · 33 (3 × 11) · superior 8,8  · lateral 7,2 · horizontal 2,55 · vertical 0
+       A4351  38,2 × 21,2 mm · 65 (5 × 13) · superior 10,7 · lateral 4,5 · horizontal 2,5 · vertical 0
+     Os códigos A4367 (folha inteira, 288,5 × 200 mm) e A4348 (17 × 31 mm, 96 por folha) não são etiquetas de prateleira e
+     ficaram fora. "Grade simples 3 × 8" não segue marca nenhuma: 63 × 33 mm com linhas de corte, para papel comum ou
+     qualquer folha de 24 etiquetas parecida. Etiquetas de outras marcas com a mesma medida e a mesma contagem por folha
+     costumam ter o mesmo gabarito: confira na prévia e numa folha de papel comum antes de usar a folha adesiva.
+     Campos: w/h largura e altura da etiqueta; col/lin colunas e linhas; mt/ml margem superior e esquerda; gh/gv espaço
+     entre etiquetas; qr lado do QR code; qrMargem zona de silêncio em módulos; logo altura do logo; fCod/fNome/fLinha tamanho
+     das letras (pt); pad respiro interno; fLinha false esconde a linha de produtos (não cabe); corte true imprime o contorno. */
+  var ETIQUETA_MODELOS = [
+    { id: 'a4360', nome: 'Pimaco A4360 · 63,5 × 38,1 mm · 21 por folha (3 × 7)', w: 63.5, h: 38.1, col: 3, lin: 7, mt: 15.2, ml: 7.2, gh: 2.55, gv: 0, qr: 30, qrMargem: 2, logo: 5, fCod: 14, fNome: 8, fLinha: 6.5, pad: 2 },
+    { id: 'a4362', nome: 'Pimaco A4362 · 99 × 33,9 mm · 16 por folha (2 × 8)', w: 99, h: 33.9, col: 2, lin: 8, mt: 12.9, ml: 4.7, gh: 2.6, gv: 0, qr: 28, qrMargem: 2, logo: 5.5, fCod: 16, fNome: 9, fLinha: 7, pad: 2 },
+    { id: 'a4356', nome: 'Pimaco A4356 · 63,5 × 25,4 mm · 33 por folha (3 × 11)', w: 63.5, h: 25.4, col: 3, lin: 11, mt: 8.8, ml: 7.2, gh: 2.55, gv: 0, qr: 21, qrMargem: 1, logo: 3.5, fCod: 12, fNome: 7, fLinha: 6, pad: 1.5 },
+    { id: 'a4351', nome: 'Pimaco A4351 · 38,2 × 21,2 mm · 65 por folha (5 × 13)', w: 38.2, h: 21.2, col: 5, lin: 13, mt: 10.7, ml: 4.5, gh: 2.5, gv: 0, qr: 17.5, qrMargem: 1, logo: 2.8, fCod: 8.5, fNome: 6, fLinha: false, pad: 1.2 },
+    { id: 'grade38', nome: 'Grade simples 3 × 8 · 63 × 33 mm · 24 por folha (com linhas de corte)', w: 63, h: 33, col: 3, lin: 8, mt: 13, ml: 9.5, gh: 1, gv: 1, qr: 26, qrMargem: 2, logo: 4.5, fCod: 13, fNome: 8, fLinha: 6.5, pad: 2, corte: true }
+  ];
+  var ETIQUETAS_MAX = 500; /* por folha de impressão (24 páginas de 21): acima disso a tela avisa e corta */
+  function etiquetaModelo(id) { for (var i = 0; i < ETIQUETA_MODELOS.length; i++) if (ETIQUETA_MODELOS[i].id === id) return ETIQUETA_MODELOS[i]; return null; }
+  function mm(v) { return (Math.round(v * 100) / 100) + 'mm'; }
+  /* uma etiqueta: logo original pequeno, código em destaque, nome em até 2 linhas, linha de produtos (se couber) e o QR da ficha */
+  function etiquetaEl(p, m) {
+    var cod = p[0], url = urlApp('p/' + encodeURIComponent(cod) + '.html'), qr = '';
+    try { if (window.MG_QR && url.length <= window.MG_QR.capacidade(10)) qr = window.MG_QR.svg(url, { margem: m.qrMargem, largura: 100, alt: 'QR code: ' + url }); } catch (e) {}
+    return el('div', { class: 'etq', style: 'width:' + mm(m.w) + ';height:' + mm(m.h) }, [
+      el('div', { class: 'etq-txt' }, [
+        el('img', { class: 'etq-logo', src: logoSrc(), alt: 'MG Peças Automotivas', width: '708', height: '267' }),
+        el('div', { class: 'etq-cod', text: cod, style: cod.length > 7 ? 'font-size:' + (Math.round(m.fCod * 7 / cod.length * 10) / 10) + 'pt;letter-spacing:0' : null }), /* código longo (MG-KV0300, até 13 letras) encolhe para caber na coluna */
+        el('div', { class: 'etq-nome', text: p[1] }),
+        m.fLinha ? el('div', { class: 'etq-linha', text: linhaDe(cod).nome }) : null
+      ]),
+      qr ? el('div', { class: 'etq-qr', html: qr }) : null
+    ]);
+  }
+  /* estilo da folha: as medidas do modelo viram variáveis CSS (o CSS de .etq usa só elas) */
+  function estiloModelo(m) {
+    return '--etq-qr:' + mm(m.qr) + ';--etq-logo:' + mm(m.logo) + ';--etq-cod:' + m.fCod + 'pt;--etq-nome:' + m.fNome + 'pt;--etq-linha:' + (m.fLinha || 6) + 'pt;--etq-pad:' + mm(m.pad);
+  }
+  /* páginas A4 com as etiquetas nas posições do modelo. pecas: [produto…] já na ordem e na quantidade de etiquetas;
+     pular: posições deixadas em branco no começo da 1ª folha (folha adesiva já usada em parte) */
+  function montarFolhasEtiquetas(pecas, m, pular) {
+    var porFolha = m.col * m.lin, pos = Math.min(Math.max(0, pular | 0), porFolha - 1), folhas = [], folha = null;
+    pecas.forEach(function (p) {
+      if (!folha || pos >= porFolha) { folha = el('div', { class: 'etq-folha' + (m.corte ? ' etq-corte' : ''), style: estiloModelo(m) }); folhas.push(folha); if (folhas.length > 1) pos = 0; }
+      var c = pos % m.col, l = Math.floor(pos / m.col), e = etiquetaEl(p, m);
+      e.style.left = mm(m.ml + c * (m.w + m.gh)); e.style.top = mm(m.mt + l * (m.h + m.gv));
+      folha.appendChild(e); pos++;
+    });
+    return folhas;
   }
 
   /* ---------- favoritos ("Minhas peças"): só os códigos MG, no aparelho ---------- */
@@ -243,7 +309,8 @@
     listaMais: '<path d="M4 6h12M4 12h12M4 18h7"/><path d="M18 14v6M15 17h6"/>',
     impressora: '<path d="M7 8V3h10v5"/><path d="M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M7 13h10v8H7z"/>',
     mais: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8.5v7M8.5 12h7"/>',
-    conversa: '<path d="M12 4a8 8 0 0 0-6.9 12L4 20l4.2-1.1A8 8 0 1 0 12 4z"/>'
+    conversa: '<path d="M12 4a8 8 0 0 0-6.9 12L4 20l4.2-1.1A8 8 0 1 0 12 4z"/>',
+    etiqueta: '<path d="M3 11V4h7l10 10-7 7z"/><circle cx="7.5" cy="8.5" r="1.4"/>'
   };
   var ICONES_LINHA = {
     'filtro-ar': '<path d="M3 7h4v4H3z"/><path d="M17 13h4v4h-4z"/><path d="M7 9h3a4 4 0 0 1 4 4 2 2 0 0 0 2 2h1"/>',
@@ -1993,7 +2060,9 @@
       btnLista.addEventListener('click', function () { adicionarComToast(p[0]); pintarLista(); });
       pintarLista();
       var acoesPeca = el('div', { class: 'linha-btn acoes-peca' }, [btnFav, btnComp, btnLista, botaoImprimir('btn-acao')]);
-      var cab = el('section', {}, [el('div', { class: 'detalhe-cod', text: p[0] }), el('div', { class: 'detalhe-nome', text: p[1] }), meta, d.e ? el('p', { class: 'ajuda', text: 'Embalagem: ' + d.e }) : null, acoesPeca]);
+      /* etiqueta com QR para a prateleira: link discreto abaixo das ações (a grade de 4 botões fica como está) */
+      var linkEtq = el('a', { class: 'link-acao link-etiqueta', href: '#/etiquetas?peca=' + encodeURIComponent(p[0]) }, [svg(ICONES.etiqueta), 'Etiqueta desta peça']);
+      var cab = el('section', {}, [el('div', { class: 'detalhe-cod', text: p[0] }), el('div', { class: 'detalhe-nome', text: p[1] }), meta, d.e ? el('p', { class: 'ajuda', text: 'Embalagem: ' + d.e }) : null, acoesPeca, linkEtq]);
       var apl;
       if (d.a && d.a.length) {
         var tb = el('table', { class: 'tabela' }, [el('thead', {}, [el('tr', {}, [el('th', { text: 'Veículo' }), el('th', { text: 'Motor' }), el('th', { text: 'Anos' })])])]);
@@ -2201,7 +2270,8 @@
       }
       l.forEach(function (x) { ul.appendChild(itemLista(x, atualizar, remover)); });
       res.appendChild(el('div', { class: 'res-cab' }, [el('h2', { class: 'visualmente-oculto', text: 'Peças da lista' }), cont]));
-      res.appendChild(el('div', { class: 'cartao lista-acoes' }, [el('div', { class: 'linha-btn' }, [btnZap, btnCopiar, btnComp, botaoImprimir()]), el('p', { class: 'ajuda', text: 'O texto traz só o código MG, o nome e a quantidade, sem valores. A lista fica guardada só neste aparelho. Imprimir / PDF gera uma folha com a lista.' })]));
+      var btnEtq = el('a', { class: 'btn btn-neutro btn-etiquetas', href: '#/etiquetas', title: 'Etiquetas com QR code para a prateleira' }, [svg(ICONES.etiqueta), 'Etiquetas']);
+      res.appendChild(el('div', { class: 'cartao lista-acoes' }, [el('div', { class: 'linha-btn' }, [btnZap, btnCopiar, btnComp, botaoImprimir(), btnEtq]), el('p', { class: 'ajuda', text: 'O texto traz só o código MG, o nome e a quantidade, sem valores. A lista fica guardada só neste aparelho. Imprimir / PDF gera uma folha com a lista; Etiquetas monta uma folha A4 de etiquetas com QR code para a prateleira.' })]));
       /* folha "Lista de peças MG": quantidade, código, nome e linha de cada peça; QR do app */
       folhaProvedor = function () {
         var lv = listaValida();
@@ -2219,6 +2289,89 @@
       atualizar();
     }
     dadosBase().then(function () { montar(); }).catch(function (e) { res.innerHTML = ''; res.appendChild(status('Não foi possível carregar a lista. Verifique a conexão.', 'erro')); console.error(e); });
+  }
+  /* tela #/etiquetas (peças da Minha lista) ou #/etiquetas?peca=<código> (uma peça): modelo da folha, quantidade, prévia
+     e Imprimir / PDF pelo módulo de impressão (folhaProvedor com etiquetas: true). Tudo no aparelho; funciona sem rede. */
+  function telaEtiquetas(q) {
+    var cod = q && q.peca ? String(q.peca).toUpperCase() : '';
+    setTopo({ titulo: 'Etiquetas', sub: cod ? 'Peça ' + cod : 'Minha lista', voltarPara: cod ? '#/peca/' + encodeURIComponent(cod) : '#/lista' }); setAba(cod ? '' : 'lista');
+    var res = el('div'), node = el('div', {}, [res]);
+    mostrar(node); res.appendChild(esqueleto(3));
+    Promise.all([dadosBase(), carregarScript('qr.js')]).then(function () { montar(); }).catch(function (e) { res.innerHTML = ''; res.appendChild(status('Não foi possível montar as etiquetas. Verifique a conexão e tente de novo.', 'erro')); console.error(e); });
+    function montar() {
+      res.innerHTML = '';
+      var itens; /* [{ p: produto, qtd }] */
+      if (cod) {
+        var ic = porCodigo[cod];
+        if (ic == null) { res.appendChild(vazio('Peça ' + cod + ' não encontrada', 'Confira o código ou use a busca.', [el('a', { class: 'btn btn-contorno', href: '#/busca?q=' + encodeURIComponent(cod), text: 'Buscar “' + cod + '”' })])); return; }
+        itens = [{ p: produtos[ic], qtd: 1 }];
+      } else {
+        var lv = listaValida();
+        if (!lv.length) { res.appendChild(vazio('Lista vazia', 'As etiquetas saem das peças da Minha lista. Toque em “Adicionar à lista” na ficha de uma peça ou no “+” de um resultado; para uma peça só, abra a ficha e toque em “Etiqueta desta peça”.', [el('a', { class: 'btn btn-contorno', href: '#/busca', text: 'Buscar peça' })])); return; }
+        itens = lv.map(function (x) { return { p: produtos[porCodigo[x.codigo]], qtd: x.qtd }; });
+      }
+      var m = etiquetaModelo(ls('mg-etiqueta-modelo')) || ETIQUETA_MODELOS[0], porUnidade = false, qtdPeca = 1, pular = 0;
+      /* modelo da folha */
+      var sel = el('select', { class: 'select', id: 'etq-modelo' }, ETIQUETA_MODELOS.map(function (o) { return el('option', { value: o.id, text: o.nome }); }));
+      sel.value = m.id;
+      sel.addEventListener('change', function () { m = etiquetaModelo(sel.value) || ETIQUETA_MODELOS[0]; ls('mg-etiqueta-modelo', m.id); pularInp.max = m.col * m.lin - 1; if (pular > +pularInp.max) { pular = 0; pularInp.value = '0'; } pintar(); });
+      /* quantidade: uma por peça / uma por unidade (lista) ou um número (peça só) */
+      var seg = null, qtdInp = null;
+      if (cod) {
+        qtdInp = el('input', { class: 'entrada entrada-num', type: 'number', min: '1', max: '200', step: '1', inputmode: 'numeric', id: 'etq-qtd', value: '1' });
+        qtdInp.addEventListener('input', function () { var n = Math.round(+qtdInp.value); qtdPeca = n >= 1 ? Math.min(n, 200) : 1; pintar(); });
+        qtdInp.addEventListener('change', function () { qtdInp.value = String(qtdPeca); });
+      } else {
+        seg = el('div', { class: 'segmentos segmentos-largo', role: 'group', 'aria-label': 'Quantidade de etiquetas' }, [[false, 'Uma por peça'], [true, 'Uma por unidade']].map(function (o) {
+          var b = el('button', { type: 'button', class: o[0] === porUnidade ? 'ativo' : '', 'aria-pressed': o[0] === porUnidade ? 'true' : 'false', text: o[1] });
+          b.addEventListener('click', function () { porUnidade = o[0]; Array.prototype.forEach.call(seg.children, function (x) { var on = x === b; x.classList.toggle('ativo', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); }); pintar(); });
+          return b;
+        }));
+      }
+      var pularInp = el('input', { class: 'entrada entrada-num', type: 'number', min: '0', max: String(m.col * m.lin - 1), step: '1', inputmode: 'numeric', id: 'etq-pular', value: '0' });
+      pularInp.addEventListener('input', function () { var n = Math.round(+pularInp.value); pular = n >= 1 ? Math.min(n, +pularInp.max) : 0; pintar(); });
+      pularInp.addEventListener('change', function () { pularInp.value = String(pular); });
+      /* peças na ordem da lista, repetidas conforme a quantidade de etiquetas; corta em ETIQUETAS_MAX */
+      function pecas() {
+        var out = [], corte = false;
+        itens.forEach(function (x) { var n = cod ? qtdPeca : (porUnidade ? x.qtd : 1); for (var i = 0; i < n; i++) { if (out.length >= ETIQUETAS_MAX) { corte = true; break; } out.push(x.p); } });
+        return { lista: out, corte: corte };
+      }
+      var resumo = el('p', { class: 'etq-resumo', 'aria-live': 'polite' }), aviso = el('div');
+      var amostraWrap = el('div', { class: 'etq-amostra' }), folhaWrap = el('div', { class: 'etq-folha-previa', 'aria-hidden': 'true' });
+      /* a folha é desenhada em mm (210 × 297) e encolhida com transform para caber na largura da tela */
+      function encaixar(wrap) {
+        var inner = wrap.firstElementChild; if (!inner) return;
+        inner.style.transform = ''; var larg = wrap.clientWidth, w = inner.offsetWidth, h = inner.offsetHeight; if (!larg || !w) return;
+        var k = Math.min(1, larg / w); inner.style.transform = 'scale(' + k + ')'; wrap.style.height = Math.ceil(h * k) + 'px';
+      }
+      function pintar() {
+        var pc = pecas(), porFolha = m.col * m.lin, total = pc.lista.length, nFolhas = Math.ceil((total + pular) / porFolha);
+        resumo.textContent = plural(total, 'etiqueta', 'etiquetas') + ' · ' + plural(nFolhas, 'folha A4', 'folhas A4') + ' · ' + m.nome.split(' · ')[0] + (pular ? ' · pulando ' + plural(pular, 'etiqueta', 'etiquetas') + ' na 1ª folha' : '');
+        aviso.innerHTML = ''; if (pc.corte) aviso.appendChild(status('Só as primeiras ' + ETIQUETAS_MAX + ' etiquetas entram na folha. Diminua a lista ou imprima em partes.', 'aviso'));
+        amostraWrap.innerHTML = ''; amostraWrap.appendChild(el('div', { class: 'etq-amostra-caixa', style: estiloModelo(m) }, [etiquetaEl(pc.lista[0], m)]));
+        folhaWrap.innerHTML = ''; folhaWrap.appendChild(montarFolhasEtiquetas(pc.lista.slice(0, Math.max(0, porFolha - pular)), m, pular)[0]);
+        encaixar(amostraWrap); encaixar(folhaWrap);
+      }
+      function aoRedimensionar() { if (!document.body.contains(folhaWrap)) { window.removeEventListener('resize', aoRedimensionar); return; } encaixar(amostraWrap); encaixar(folhaWrap); }
+      window.addEventListener('resize', aoRedimensionar);
+      res.appendChild(el('section', { class: 'cartao etq-opcoes' }, [
+        el('h2', { text: 'Folha de etiquetas' }),
+        el('p', { class: 'ajuda', style: 'margin:6px 0 12px', text: cod ? 'Etiqueta da peça ' + cod + ' com o código, o nome e um QR code que abre a ficha no app, para colar na prateleira ou na caixa.' : 'Uma etiqueta por peça da Minha lista, com o código, o nome e um QR code que abre a ficha no app, para colar na prateleira ou na caixa.' }),
+        el('label', { class: 'campo', for: 'etq-modelo' }, [el('span', { class: 'rotulo', text: 'Modelo da folha (A4)' }), el('div', { class: 'select-wrap' }, [sel])]),
+        seg ? el('div', { class: 'campo' }, [el('span', { class: 'rotulo', id: 'etq-qtd-rotulo', text: 'Quantidade de etiquetas' }), seg]) : el('label', { class: 'campo', for: 'etq-qtd' }, [el('span', { class: 'rotulo', text: 'Quantidade de etiquetas' }), qtdInp]),
+        el('label', { class: 'campo', for: 'etq-pular' }, [el('span', { class: 'rotulo', text: 'Pular etiquetas já usadas na 1ª folha' }), pularInp]),
+        el('div', { class: 'campo' }, [botaoImprimir()]),
+        el('p', { class: 'ajuda', text: 'Na impressão, escolha 100% / tamanho real, sem ajustar à página, papel A4. Antes de usar a folha adesiva, imprima uma vez em papel comum e sobreponha para conferir.' })
+      ]));
+      res.appendChild(el('section', { class: 'cartao etq-previa' }, [el('h2', { text: 'Prévia' }), resumo, aviso, el('p', { class: 'rotulo', style: 'margin-top:12px', text: 'Uma etiqueta' }), amostraWrap, el('p', { class: 'rotulo', style: 'margin-top:14px', text: '1ª folha' }), folhaWrap]));
+      pintar();
+      requestAnimationFrame(function () { encaixar(amostraWrap); encaixar(folhaWrap); });
+      folhaProvedor = function () {
+        var pc = pecas(); if (!pc.lista.length) return null;
+        return { etiquetas: true, titulo: 'Etiquetas MG' + (cod ? ' ' + cod : ''), corpo: montarFolhasEtiquetas(pc.lista, m, pular) };
+      };
+    }
   }
   function telaSobre() {
     setTopo({ titulo: 'Sobre a MG', voltarPara: '#/' }); setAba('');
@@ -2381,6 +2534,7 @@
       case 'lista': telaLista(); break;
       case 'sobre': telaSobre(); break;
       case 'instalar': telaInstalar(); break;
+      case 'etiquetas': telaEtiquetas(r.q); break;
       /* endereço desconhecido (link antigo ou digitado errado): avisa e volta ao Início */
       default: toast('Endereço não encontrado'); location.hash = '#/';
     }
