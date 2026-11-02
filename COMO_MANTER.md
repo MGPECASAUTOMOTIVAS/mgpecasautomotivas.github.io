@@ -10,6 +10,10 @@ Guia curto para o Filipe. Tudo o que está aqui foi testado em 02/11/2026.
 - É o catálogo da MG em forma de aplicativo: abre no navegador do celular e pode ser instalado na tela inicial
   (iPhone e Android). Mostra as peças, as aplicações e os números originais. Funciona sem internet depois da
   primeira abertura.
+- **Minha lista** (aba Lista, tela `#/lista`): quem usa o app monta uma lista de códigos MG com quantidade (botão
+  "Adicionar à lista" na ficha ou o "+" nos resultados) e manda pelo WhatsApp (sem número de destino: a pessoa escolhe
+  para quem) ou copia o texto. Fica guardada só no aparelho (`localStorage`, chave `mg-lista`, como `mg-favoritos` para
+  Minhas peças); nada passa por servidor; o texto traz só código, nome e quantidade, sem valores, e o link do app.
 - Endereço no ar: https://mgpecasautomotivas.github.io/
 - Os arquivos ficam em dois lugares:
   - **Repositório** `MGPECASAUTOMOTIVAS/mgpecasautomotivas.github.io` no GitHub (organização da MG) → a raiz dele é o que
@@ -66,8 +70,8 @@ git push origin main
 ## 4. Como mudar a versão
 A versão tem que mudar a cada publicação, senão o celular continua com os arquivos antigos. São dois lugares, com
 o mesmo texto (formato ano.mês.dia-número):
-- `config.js` → linha `versao: '2026.11.02-26'`
-- `sw.js` → linha `var VERSAO = '2026.11.02-26';`
+- `config.js` → linha `versao: '2026.11.02-27'`
+- `sw.js` → linha `var VERSAO = '2026.11.02-27';`
 Se os dois ficarem diferentes, o teste do item 5 acusa.
 
 ## 5. Como rodar o teste
@@ -76,8 +80,8 @@ Precisa do Node.js e do Playwright com o Chromium (uma vez só: `npm install -g 
 ```
 node teste/fumaca.js
 ```
-Em uns 15 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, compartilhar, instalar, versão,
-uso sem internet) e termina com `116/116 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
+Em uns 20 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, Minha lista, compartilhar, instalar,
+versão, uso sem internet) e termina com `155/155 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
 Para guardar capturas de tela: `node teste/fumaca.js --capturas pasta_das_capturas`.
 
 ## 6. Onde estão as regras

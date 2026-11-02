@@ -315,6 +315,100 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   ok(/\/p\/MG001\.html$/.test(copiado), 'link copiado aponta para p/MG001.html (' + copiado + ')');
   igual(await page.textContent('#toast .toast-txt'), 'Link copiado', 'toast "Link copiado"');
 
+  console.log('\nMinha lista');
+  /* 5ª aba "Lista" (a barra não passa de 5) e estado vazio explicando como adicionar */
+  igual((await page.$$('.abas .aba')).length, 5, 'barra com 5 abas (Início, Placa, Busca, Linhas, Lista)');
+  await ir(page, '#/lista', '.vazio');
+  var vazioLista = await page.evaluate(function () { return { h2: document.querySelector('#conteudo .vazio h2').textContent, p: document.querySelector('#conteudo .vazio p').textContent, badge: !!document.querySelector('.aba[data-aba="lista"] .aba-badge'), aba: document.querySelector('.aba[data-aba="lista"]').getAttribute('aria-selected') }; });
+  ok(vazioLista.h2 === 'Lista vazia' && /Adicionar à lista/.test(vazioLista.p) && /“\+”/.test(vazioLista.p) && !vazioLista.badge && vazioLista.aba === 'true', 'tela Lista vazia explica como adicionar (ficha e "+"), aba Lista selecionada e sem contador');
+  /* ficha: adicionar (qtd 1) e somar 1 */
+  await ir(page, '#/peca/MG001', '.btn-lista');
+  var btnListaBox = await (await page.$('#conteudo .btn-lista')).boundingBox();
+  ok(btnListaBox.height >= 44 && (await page.textContent('#conteudo .btn-lista')).trim() === 'Adicionar à lista' && (await page.$$('#conteudo .acoes-peca .btn')).length === 3, 'botão "Adicionar à lista" na ficha, junto de Salvar peça e Compartilhar, com 44 px');
+  await page.click('#conteudo .btn-lista');
+  await page.waitForFunction(function () { var t = document.getElementById('toast'); return !t.hidden && /Na lista/.test(t.textContent); });
+  igual(await page.textContent('#toast .toast-txt'), 'Na lista', 'toast "Na lista"');
+  igual(await page.getAttribute('#toast .toast-acao', 'href'), '#/lista', '"Ver lista" no toast abre #/lista');
+  var l1 = await page.evaluate(function () { return JSON.parse(localStorage.getItem('mg-lista')); });
+  ok(l1.length === 1 && l1[0].codigo === 'MG001' && l1[0].qtd === 1 && /^\d{4}-\d\d-\d\dT/.test(l1[0].adicionadoEm), 'mg-lista no aparelho: [{ codigo, qtd: 1, adicionadoEm }]');
+  await page.click('#conteudo .btn-lista');
+  await page.waitForFunction(function () { return /Lista: 2 un\./.test(document.getElementById('toast').textContent); });
+  igual(await page.textContent('#toast .toast-txt'), 'Lista: 2 un.', 'segundo toque soma 1: toast "Lista: 2 un."');
+  var badges = await page.evaluate(function () { return { botao: document.querySelector('#conteudo .btn-lista .btn-badge').textContent, aba: document.querySelector('.aba[data-aba="lista"] .aba-badge').textContent, nome: document.querySelector('.aba[data-aba="lista"]').getAttribute('aria-label'), qtd: JSON.parse(localStorage.getItem('mg-lista'))[0].qtd }; });
+  ok(badges.botao === '2' && badges.aba === '1' && badges.nome === 'Lista, 1 peça' && badges.qtd === 2, 'quantidade 2 no botão da ficha, contador 1 na aba Lista (nome acessível "Lista, 1 peça") e qtd 2 gravada');
+  await capturar(page, '10-ficha-adicionar-lista');
+  /* "+" discreto por cartão nos resultados por veículo */
+  await ir(page, '#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.painel-res .lista .item-lista');
+  var mais = await page.evaluate(function () { var b = document.querySelector('#conteudo .painel-res .lista .item-lista'), r = b.getBoundingClientRect(); return { label: b.getAttribute('aria-label'), w: r.width, h: r.height, seta: !!b.parentNode.querySelector('.item-seta'), cod: b.parentNode.querySelector('.item-cod').textContent }; });
+  ok(/^Adicionar [A-Z0-9-]+ à lista$/.test(mais.label) && mais.w >= 44 && mais.h >= 44 && !mais.seta, 'cartão do resultado com botão "+" de 44 px ("' + mais.label + '") no lugar da seta');
+  await page.click('#conteudo .painel-res .lista .item-lista');
+  await page.waitForFunction(function () { return /na lista/.test(document.getElementById('toast').textContent); });
+  igual(await page.textContent('#toast .toast-txt'), mais.cod + ' na lista', 'toast do "+" com o código');
+  igual(await page.textContent('#conteudo .painel-res .lista .item-lista .item-lista-num'), '1', 'número no "+" mostra 1 na lista');
+  var cod2 = mais.cod;
+  /* tela da lista: cartões, totais, quantidade (−, número editável, +), texto exato, WhatsApp e copiar */
+  await ir(page, '#/lista', '.lista-item');
+  igual((await page.$$('#conteudo .lista-item')).length, 2, 'lista com 2 peças');
+  igual(await page.textContent('#conteudo .lista-cont'), '2 peças · 3 unidades neste aparelho', 'total de peças e unidades');
+  var itemInfo = await page.evaluate(function () { var li = document.querySelector('#conteudo .lista-item'), b = li.querySelectorAll('.qtd-btn'); function r(e) { var x = e.getBoundingClientRect(); return x.width >= 44 && x.height >= 44; } return { cod: li.querySelector('.item-cod').textContent, linha: li.querySelector('.item-apl').textContent, foto: !!li.querySelector('.foto'), val: li.querySelector('.qtd-num').value, toque: r(b[0]) && r(b[1]) && r(li.querySelector('.qtd-num')) && r(li.querySelector('.item-remover')), remover: li.querySelector('.item-remover').getAttribute('aria-label') }; });
+  ok(itemInfo.cod === 'MG001' && itemInfo.linha === 'Mangueiras do Filtro de Ar' && itemInfo.foto && itemInfo.val === '2' && itemInfo.toque && itemInfo.remover === 'Remover MG001 da lista', 'cartão com miniatura, código, nome, linha, quantidade 2 e controles de 44 px (' + JSON.stringify(itemInfo) + ')');
+  await page.click('#conteudo .lista-item >> nth=0 >> .qtd-btn >> nth=1');
+  igual(await page.inputValue('#conteudo .lista-item >> nth=0 >> .qtd-num'), '3', '"+" na lista: 3');
+  igual(await page.evaluate(function () { return JSON.parse(localStorage.getItem('mg-lista'))[0].qtd; }), 3, 'qtd 3 gravada');
+  igual(await page.textContent('#conteudo .lista-cont'), '2 peças · 4 unidades neste aparelho', 'total atualizado na hora');
+  await page.click('#conteudo .lista-item >> nth=0 >> .qtd-btn >> nth=0');
+  igual(await page.inputValue('#conteudo .lista-item >> nth=0 >> .qtd-num'), '2', '"−" na lista: 2');
+  await page.fill('#conteudo .lista-item >> nth=0 >> .qtd-num', '12'); await page.keyboard.press('Enter');
+  igual(await page.evaluate(function () { return JSON.parse(localStorage.getItem('mg-lista'))[0].qtd; }), 12, 'número editado (12 + Enter) gravado');
+  await page.fill('#conteudo .lista-item >> nth=0 >> .qtd-num', '0'); await page.keyboard.press('Enter');
+  ok((await page.inputValue('#conteudo .lista-item >> nth=0 >> .qtd-num')) === '1' && (await page.evaluate(function () { return document.querySelector('#conteudo .lista-item .qtd-btn').disabled; })), '0 vira 1 (mínimo) e o "−" fica desativado');
+  await page.fill('#conteudo .lista-item >> nth=0 >> .qtd-num', '5000'); await page.keyboard.press('Enter');
+  igual(await page.inputValue('#conteudo .lista-item >> nth=0 >> .qtd-num'), '999', '5000 vira 999 (máximo)');
+  await page.fill('#conteudo .lista-item >> nth=0 >> .qtd-num', '2'); await page.keyboard.press('Enter');
+  var hoje = (function () { var d = new Date(), z = function (n) { return (n < 10 ? '0' : '') + n; }; return z(d.getDate()) + '/' + z(d.getMonth() + 1) + '/' + d.getFullYear(); })();
+  var nome2 = produtosJson.filter(function (p) { return p[0] === cod2; })[0][1];
+  var esperado = 'Lista de peças MG · ' + hoje + '\n\n2 un. · MG001 · Mangueira do Filtro de Ar\n1 un. · ' + cod2 + ' · ' + nome2 + '\n\nCatálogo MG Peças Automotivas\nhttps://mgpecasautomotivas.github.io/';
+  igual(await page.textContent('#conteudo .lista-texto-pre'), esperado, 'texto gerado exato (cabeçalho com a data, "2 un. · MG001 · nome", rodapé com o catálogo e o link)');
+  igual(await page.evaluate(function () { return MG_APP.textoLista(); }), esperado, 'MG_APP.textoLista devolve o mesmo texto');
+  var zap = await page.evaluate(function () { var a = document.querySelector('#conteudo .btn-zap'); return { href: a.getAttribute('href'), target: a.target, rel: a.rel }; });
+  ok(zap.href === 'https://wa.me/?text=' + encodeURIComponent(esperado) && zap.target === '_blank' && /noopener/.test(zap.rel), '"Enviar pelo WhatsApp" abre wa.me sem número de destino, texto em encodeURIComponent, em nova aba');
+  ok(!/pre[çc]o|pedido|R\$|valor|compr/i.test(esperado) && !/pre[çc]o|pedido|R\$|compr/i.test(await page.textContent('#conteudo')), 'tela e texto sem valores e sem "pedido"');
+  await page.evaluate(function () { window.__copiado = ''; });
+  await page.click('#conteudo .btn-copiar-lista'); await page.waitForFunction(function () { return !!window.__copiado; });
+  igual(await page.evaluate(function () { return window.__copiado; }), esperado, '"Copiar texto" copia o mesmo texto');
+  igual(await page.textContent('#toast .toast-txt'), 'Texto da lista copiado', 'toast "Texto da lista copiado"');
+  ok(!(await page.$('#conteudo .btn-comp-lista')), 'sem Web Share o botão Compartilhar não aparece (Copiar texto resolve no computador)');
+  await capturar(page, '11-minha-lista');
+  /* remover com "Desfazer" no toast */
+  await page.click('#conteudo .lista-item >> nth=0 >> .item-remover');
+  await page.waitForFunction(function () { return /removida da lista/.test(document.getElementById('toast').textContent); });
+  var depoisRemover = await page.evaluate(function () { var b = document.querySelector('#toast button.toast-acao'); return { n: document.querySelectorAll('#conteudo .lista-item').length, toast: document.querySelector('#toast .toast-txt').textContent, botao: b && b.textContent, foco: document.activeElement.className, cont: document.querySelector('#conteudo .lista-cont').textContent, ls: JSON.parse(localStorage.getItem('mg-lista')).length }; });
+  ok(depoisRemover.n === 1 && depoisRemover.toast === 'MG001 removida da lista' && depoisRemover.botao === 'Desfazer' && depoisRemover.foco === 'item-remover' && depoisRemover.cont === '1 peça · 1 unidade neste aparelho' && depoisRemover.ls === 1, 'remover: sai da lista e do aparelho, toast com "Desfazer", foco no × da peça seguinte');
+  await page.click('#toast button.toast-acao');
+  await page.waitForFunction(function () { return document.querySelectorAll('#conteudo .lista-item').length === 2; });
+  var desfeito = await page.evaluate(function () { var l = JSON.parse(localStorage.getItem('mg-lista')); return { cod: l[0].codigo, qtd: l[0].qtd, primeiro: document.querySelector('#conteudo .lista-item .item-cod').textContent, foco: document.activeElement.getAttribute('aria-label') }; });
+  ok(desfeito.cod === 'MG001' && desfeito.qtd === 2 && desfeito.primeiro === 'MG001' && desfeito.foco === 'Remover MG001 da lista', '"Desfazer" devolve MG001 na mesma posição com quantidade 2 e foca o ×');
+  /* persistência: recarregar */
+  await page.reload(); await page.waitForSelector('#conteudo .lista-item');
+  igual(await page.textContent('#conteudo .lista-cont'), '2 peças · 3 unidades neste aparelho', 'lista continua depois de recarregar');
+  igual(await page.textContent('.aba[data-aba="lista"] .aba-badge'), '2', 'contador 2 na aba ao abrir o app');
+  /* Início: entrada "Minha lista" só com itens, entre o veículo e Recentes */
+  await ir(page, '#/', '.secao-lista:not([hidden]) .cartao-lista');
+  var inicioLista = await page.evaluate(function () { var s = document.querySelector('#conteudo .secao-lista'), rec = document.querySelector('#conteudo .recentes'); return { h2: s.querySelector('h2').textContent, link: s.querySelector('.secao-cab .link').getAttribute('href'), b: s.querySelector('.cartao-lista b').textContent, href: s.querySelector('.cartao-lista').getAttribute('href'), alt: Math.round(s.querySelector('.cartao-lista').getBoundingClientRect().height), antesRecentes: !rec || s.getBoundingClientRect().top < rec.getBoundingClientRect().top, depoisVeic: s.getBoundingClientRect().top > document.querySelector('#conteudo .cartao-compacto').getBoundingClientRect().top }; });
+  ok(inicioLista.h2 === 'Minha lista' && inicioLista.link === '#/lista' && inicioLista.b === '2 peças · 3 unidades' && inicioLista.href === '#/lista' && inicioLista.alt >= 44 && inicioLista.antesRecentes && inicioLista.depoisVeic, 'Início: seção "Minha lista" (2 peças · 3 unidades) depois do veículo e antes de Recentes, abrindo #/lista');
+  /* limpar com confirmação em linha */
+  await ir(page, '#/lista', '.btn-limpar-lista');
+  await page.click('#conteudo .btn-limpar-lista');
+  ok(!(await page.evaluate(function () { return document.querySelector('#conteudo .confirmar').hidden; })) && (await page.$$('#conteudo .lista-item')).length === 2, '"Limpar lista" pede confirmação em linha sem apagar');
+  await page.click('#conteudo .confirmar .btn-neutro');
+  ok(await page.evaluate(function () { return document.querySelector('#conteudo .confirmar').hidden && document.activeElement.classList.contains('btn-limpar-lista'); }), 'Cancelar fecha a confirmação e devolve o foco');
+  await page.click('#conteudo .btn-limpar-lista'); await page.click('#conteudo .confirmar .btn-primario');
+  await page.waitForSelector('#conteudo .vazio');
+  var limpo = await page.evaluate(function () { return { ls: localStorage.getItem('mg-lista'), badge: !!document.querySelector('.aba[data-aba="lista"] .aba-badge'), foco: document.activeElement.textContent }; });
+  ok(limpo.ls === '[]' && !limpo.badge && limpo.foco === 'Buscar peça', 'Apagar: lista vazia no aparelho, sem contador na aba, foco em "Buscar peça"');
+  await ir(page, '#/', '.secao-busca .entrada');
+  ok(await page.evaluate(function () { return document.querySelector('#conteudo .secao-lista').hidden; }), 'Início sem a seção "Minha lista" com a lista vazia');
+
   console.log('\nLinhas, Instalar, Sobre');
   await ir(page, '#/linhas', '.grade-linhas .linha-card');
   await page.waitForFunction(function () { return !/…/.test(document.querySelector('#conteudo .grade-linhas .cont').textContent); });
@@ -375,7 +469,8 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
 
   console.log('\nLargura 360');
   var p360 = await ctx.newPage(); colher(p360, erros); await p360.setViewportSize({ width: 360, height: 740 });
-  var telas = [['#/', '.secao-busca .entrada'], ['#/busca?q=mangueira%20gol', '.painel-res .res-cont b'], ['#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.painel-res .res-cont b'], ['#/peca/MG001', 'table.tabela'], ['#/instalar', '.qr-caixa svg'], ['#/sobre', '.versao b']];
+  await page.evaluate(function () { localStorage.setItem('mg-lista', JSON.stringify([{ codigo: 'MG001', qtd: 2, adicionadoEm: '2026-11-02T15:00:00.000Z' }, { codigo: 'MG076', qtd: 1, adicionadoEm: '2026-11-02T15:01:00.000Z' }])); }); /* lista com itens para as telas 360 e paisagem */
+  var telas = [['#/', '.secao-busca .entrada'], ['#/busca?q=mangueira%20gol', '.painel-res .res-cont b'], ['#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.painel-res .res-cont b'], ['#/peca/MG001', 'table.tabela'], ['#/lista', '.lista-item'], ['#/instalar', '.qr-caixa svg'], ['#/sobre', '.versao b']];
   await p360.goto(base + '#/'); await p360.waitForSelector('.secao-busca .entrada');
   for (var k = 0; k < telas.length; k++) {
     if (k) await ir(p360, telas[k][0], telas[k][1]);
@@ -401,11 +496,16 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   ok(ladoP[1] > ladoP[0] && ladoP[2] < ladoP[3] && ladoP[4] > ladoP[0], 'ficha deitada com foto à esquerda e código, nome e ações à direita (foto até x=' + ladoP[0] + ', código em x=' + ladoP[1] + ')');
   ok(ladoP[2] >= 0 && ladoP[2] < 390 && ladoP[5] <= 200, 'código à vista sem rolar e foto com até 200 px de altura (' + ladoP[5] + ' px)');
   await capturar(p360, '08-paisagem-ficha');
+  await ir(p360, '#/lista', '.lista-item');
+  var ladoLista = await p360.evaluate(function () { var li = document.querySelector('#conteudo .lista-item'), a = li.querySelector('.item').getBoundingClientRect(), q = li.querySelector('.lista-qtd').getBoundingClientRect(), x = li.querySelector('.item-remover').getBoundingClientRect(); return [Math.round(a.right), Math.round(q.left), Math.round(q.right), Math.round(x.left), document.documentElement.scrollWidth <= document.documentElement.clientWidth]; });
+  ok(ladoLista[1] >= ladoLista[0] && ladoLista[3] >= ladoLista[2] && ladoLista[4], 'paisagem: cartão da lista em uma linha (peça · quantidade · ×) sem rolagem horizontal');
+  await ir(p360, '#/peca/MG001', 'table.tabela');
   await p360.emulateMedia({ colorScheme: 'dark' }); await capturar(p360, '09-paisagem-ficha-escuro'); await p360.emulateMedia({ colorScheme: 'light' });
   await p360.setViewportSize({ width: 390, height: 844 });
   await ir(p360, '#/peca/MG046', 'table.tabela');
   var emPe = await p360.evaluate(function () { var f = document.querySelector('#conteudo .detalhe-foto').getBoundingClientRect(), c = document.querySelector('#conteudo .detalhe-cod').getBoundingClientRect(); return [Math.round(f.bottom), Math.round(c.top)]; });
   ok(emPe[1] >= emPe[0] + 12, 'em pé a foto continua acima do código (' + emPe.join(' → ') + ')');
+  await p360.evaluate(function () { localStorage.removeItem('mg-lista'); });
   await ctx.close();
 
   /* ---------- service worker: registro, cache e uso offline ---------- */

@@ -1,6 +1,7 @@
 /* MG Peças Automotivas — app de catálogo (PWA)
    Vanilla JS, sem build. Rotas por hash: #/ #/placa #/busca #/busca?q=MG001 #/veiculo/Marca/Modelo/Ano
-   #/linhas #/linha/<id> #/peca/<CÓDIGO> #/minhas #/sobre #/instalar (QR code e passo a passo; carrega qr.js só nessa tela)
+   #/linhas #/linha/<id> #/peca/<CÓDIGO> #/minhas #/lista ("Minha lista": códigos MG com quantidade, no aparelho) #/sobre
+   #/instalar (QR code e passo a passo; carrega qr.js só nessa tela)
    Dados: indice.json, produtos.json, imagens.json, marcas/<marca>.json (mesmos do buscador do site) + detalhes.json (gerado para o app).
    Configuração: config.js (window.MG_CONFIG), carregado antes deste arquivo e também pelo service worker. */
 (function () {
@@ -86,6 +87,64 @@
     lsJson('mg-favoritos', lista.slice(0, FAV_MAX));
     return salvo;
   }
+
+  /* ---------- "Minha lista": códigos MG com quantidade, só no aparelho (localStorage mg-lista) ----------
+     Quem está no balcão ou na oficina monta a lista no celular e manda pelo WhatsApp ou copia o texto para o orçamento.
+     Nada passa por servidor; o texto não traz valores: é uma lista de peças, enviada para quem a pessoa quiser.
+     Item: { codigo, qtd, adicionadoEm }; a ordem é a de inclusão. */
+  var LISTA_MAX = 200, QTD_MAX = 999;
+  function qtdValida(n) { n = Math.round(+n); if (!(n >= 1)) n = 1; return Math.min(n, QTD_MAX); }
+  function lista() {
+    var l = lsJson('mg-lista');
+    return Array.isArray(l) ? l.filter(function (x) { return x && typeof x.codigo === 'string' && x.codigo; }).map(function (x) { return { codigo: x.codigo.toUpperCase(), qtd: qtdValida(x.qtd), adicionadoEm: x.adicionadoEm || '' }; }) : [];
+  }
+  function gravarLista(l) { lsJson('mg-lista', l.slice(0, LISTA_MAX)); pintarBadgeLista(); }
+  function naLista(cod) { cod = String(cod).toUpperCase(); var l = lista(); for (var i = 0; i < l.length; i++) if (l[i].codigo === cod) return l[i]; return null; }
+  /* soma 1 (ou n) à peça; entra no fim se ainda não está. Devolve { qtd, nova } ou null com a lista cheia */
+  function adicionarLista(cod, n) {
+    cod = String(cod).toUpperCase(); var l = lista(), it = null;
+    l.forEach(function (x) { if (x.codigo === cod) it = x; });
+    if (it) { it.qtd = qtdValida(it.qtd + (n || 1)); gravarLista(l); return { qtd: it.qtd, nova: false }; }
+    if (l.length >= LISTA_MAX) return null;
+    it = { codigo: cod, qtd: qtdValida(n || 1), adicionadoEm: new Date().toISOString() };
+    l.push(it); gravarLista(l); return { qtd: it.qtd, nova: true };
+  }
+  function definirQtdLista(cod, qtd) { var l = lista(); l.forEach(function (x) { if (x.codigo === cod) x.qtd = qtdValida(qtd); }); gravarLista(l); }
+  /* devolve { item, pos } para o "Desfazer" do toast */
+  function removerLista(cod) { var l = lista(), pos = -1; l.forEach(function (x, i) { if (x.codigo === cod) pos = i; }); if (pos < 0) return null; var it = l.splice(pos, 1)[0]; gravarLista(l); return { item: it, pos: pos }; }
+  function devolverLista(r) { var l = lista().filter(function (x) { return x.codigo !== r.item.codigo; }); l.splice(Math.min(r.pos, l.length), 0, r.item); gravarLista(l); }
+  function limparLista() { gravarLista([]); }
+  /* itens cujo código existe no catálogo carregado */
+  function listaValida() { return lista().filter(function (x) { return porCodigo[x.codigo] != null; }); }
+  function totaisLista(l) { return { itens: l.length, unidades: l.reduce(function (s, x) { return s + x.qtd; }, 0) }; }
+  function resumoLista(t) { return plural(t.itens, 'peça', 'peças') + ' · ' + plural(t.unidades, 'unidade', 'unidades'); }
+  /* texto enviado/copiado: cabeçalho com a data, uma linha por peça, rodapé com o nome do catálogo e o link do app (sem valores) */
+  function textoLista(l) {
+    var linhas = ['Lista de peças MG · ' + dataBr(hojeIso()), ''];
+    l.forEach(function (x) { linhas.push(x.qtd + ' un. · ' + x.codigo + ' · ' + produtos[porCodigo[x.codigo]][1]); });
+    linhas.push('', 'Catálogo MG Peças Automotivas', urlApp());
+    return linhas.join('\n');
+  }
+  /* sem número de destino: o WhatsApp pergunta para quem enviar (no computador abre o WhatsApp Web) */
+  function urlWhatsApp(texto) { return 'https://wa.me/?text=' + encodeURIComponent(texto); }
+  /* "Adicionar à lista" (ficha) ou "+" do cartão: soma 1 e avisa no toast com "Ver lista"; prefixo = código, nos cartões */
+  function adicionarComToast(cod, prefixo) {
+    var r = adicionarLista(cod);
+    if (!r) { toast('A lista está cheia (' + LISTA_MAX + ' peças). Envie ou limpe a lista.'); return null; }
+    var pre = prefixo ? prefixo + ' ' : '';
+    toast(r.nova ? (pre ? pre + 'na lista' : 'Na lista') : (pre ? pre + 'na lista: ' : 'Lista: ') + r.qtd + ' un.', { texto: 'Ver lista', href: '#/lista' });
+    return r;
+  }
+  /* contador na aba Lista (badge); o nome acessível da aba traz a contagem */
+  var abaLista = null;
+  function pintarBadgeLista() {
+    if (!abaLista) return;
+    var n = lista().length, b = abaLista.querySelector('.aba-badge');
+    if (!n) { if (b) b.remove(); abaLista.removeAttribute('aria-label'); return; }
+    if (!b) { b = el('span', { class: 'aba-badge', 'aria-hidden': 'true' }); abaLista.appendChild(b); }
+    b.textContent = n > 99 ? '99+' : String(n);
+    abaLista.setAttribute('aria-label', 'Lista, ' + plural(n, 'peça', 'peças'));
+  }
   var ICONES = {
     busca: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
     seta: '<path d="m9 6 6 6-6 6"/>',
@@ -112,7 +171,11 @@
     coracao: '<path d="M12 20.3S4.5 15.6 4.5 10.2A4.1 4.1 0 0 1 12 7.9a4.1 4.1 0 0 1 7.5 2.3c0 5.4-7.5 10.1-7.5 10.1z"/>',
     fechar: '<path d="m7 7 10 10M17 7 7 17"/>',
     ampliar: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/><path d="M11 8.5v5M8.5 11h5"/>',
-    atualizar: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>'
+    atualizar: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>',
+    lista: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+    listaMais: '<path d="M4 6h12M4 12h12M4 18h7"/><path d="M18 14v6M15 17h6"/>',
+    mais: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8.5v7M8.5 12h7"/>',
+    conversa: '<path d="M12 4a8 8 0 0 0-6.9 12L4 20l4.2-1.1A8 8 0 1 0 12 4z"/>'
   };
   var ICONES_LINHA = {
     'filtro-ar': '<path d="M3 7h4v4H3z"/><path d="M17 13h4v4h-4z"/><path d="M7 9h3a4 4 0 0 1 4 4 2 2 0 0 0 2 2h1"/>',
@@ -262,9 +325,12 @@
     if (!a[1]) return 'até ' + a[2];
     return a[1] === a[2] ? String(a[1]) : a[1] + ' a ' + a[2];
   }
-  /* remover: função chamada ao tocar no "×" do cartão (lista Minhas peças); o botão fica fora do link */
-  function itemPeca(i, apl, chip, remover) {
-    var p = produtos[i];
+  /* remover: função chamada ao tocar no "×" do cartão (Minhas peças e Minha lista); o botão fica fora do link.
+     opcoes.lista: botão "+" de 44px no lugar da seta (resultados, veículo, linha) que põe a peça em Minha lista;
+     opcoes.rotuloRemover: complemento do nome acessível do × ("da lista"; padrão "de Minhas peças") */
+  function itemPeca(i, apl, chip, remover, opcoes) {
+    opcoes = opcoes || {};
+    var p = produtos[i], comAcao = !!(remover || opcoes.lista);
     var corpo = el('span', {}, [
       el('span', { class: 'item-cod', text: p[0] }),
       el('span', { class: 'item-nome', text: p[1] }),
@@ -272,11 +338,17 @@
       chip ? el('span', { class: 'etiqueta etiqueta-aviso', text: chip }) : null
     ]);
     corpo.style.display = 'flex'; corpo.style.flexDirection = 'column'; corpo.style.minWidth = '0';
-    var li = el('li', { class: remover ? 'item-com-acao' : null }, [el('a', { class: 'item', href: '#/peca/' + encodeURIComponent(p[0]) }, [fotoEl(i, ''), corpo, remover ? null : svg(ICONES.seta, { class: 'item-seta' })])]);
+    var li = el('li', { class: comAcao ? 'item-com-acao' : null }, [el('a', { class: 'item', href: '#/peca/' + encodeURIComponent(p[0]) }, [fotoEl(i, ''), corpo, comAcao ? null : svg(ICONES.seta, { class: 'item-seta' })])]);
     if (remover) {
-      var b = el('button', { type: 'button', class: 'item-remover', 'aria-label': 'Remover ' + p[0] + ' de Minhas peças', title: 'Remover' }, [svg(ICONES.fechar)]);
+      var b = el('button', { type: 'button', class: 'item-remover', 'aria-label': 'Remover ' + p[0] + ' ' + (opcoes.rotuloRemover || 'de Minhas peças'), title: 'Remover' }, [svg(ICONES.fechar)]);
       b.addEventListener('click', function () { remover(p[0], li); });
       li.appendChild(b);
+    } else if (opcoes.lista) {
+      /* "+" discreto onde ficava a seta: soma 1 em Minha lista sem sair dos resultados; o número mostra quantas já estão lá */
+      var bl = el('button', { type: 'button', class: 'item-lista', title: 'Adicionar à lista' }, [svg(ICONES.mais), el('span', { class: 'item-lista-num', 'aria-hidden': 'true', hidden: true })]);
+      var pintarNum = function () { var it = naLista(p[0]), n = bl.lastChild; n.hidden = !it; n.textContent = it ? String(it.qtd) : ''; bl.setAttribute('aria-label', 'Adicionar ' + p[0] + ' à lista' + (it ? ' (' + plural(it.qtd, 'unidade', 'unidades') + ' na lista)' : '')); };
+      bl.addEventListener('click', function () { adicionarComToast(p[0], p[0]); pintarNum(); });
+      pintarNum(); li.appendChild(bl);
     }
     return li;
   }
@@ -312,6 +384,21 @@
     /* só os arquivos pequenos; detalhes.json (500 KB) entra depois, e só se há peças salvas (antes ele descia junto com
        produtos.json no 1º acesso e atrasava as contagens do Início no 3G) */
     dadosBase().then(function () { montar(); if (favoritosValidos().length && !detalhes) dadosDetalhes().then(montar).catch(function () {}); });
+    return sec;
+  }
+  /* Início: entrada "Minha lista" (só com itens), no estilo de Minhas peças: título + "Ver lista" e um cartão de uma linha */
+  function secaoLista() {
+    var sec = el('section', { class: 'secao secao-lista', hidden: true });
+    dadosBase().then(function () {
+      var l = listaValida(); if (!l.length) return;
+      sec.appendChild(el('div', { class: 'secao-cab' }, [el('h2', { text: 'Minha lista' }), el('a', { class: 'link', href: '#/lista', text: 'Ver lista' })]));
+      sec.appendChild(el('a', { class: 'cartao cartao-link cartao-lista', href: '#/lista' }, [
+        el('span', { class: 'cartao-link-ic' }, [svg(ICONES.lista)]),
+        el('span', { class: 'cartao-link-txt' }, [el('b', { text: resumoLista(totaisLista(l)) }), el('span', { text: 'Enviar pelo WhatsApp ou copiar o texto' })]),
+        el('span', { class: 'cartao-link-seta' }, [svg(ICONES.seta)])
+      ]));
+      sec.hidden = false;
+    });
     return sec;
   }
   function aplicacoesResumo(cod, max) {
@@ -1291,6 +1378,7 @@
   }
   /* abas inferiores: aria-selected e tabindex "rotativo" (só a aba ativa entra na sequência do Tab; as setas trocam o foco) */
   var abas = Array.prototype.slice.call(document.querySelectorAll('.aba'));
+  abaLista = document.querySelector('.aba[data-aba="lista"]'); pintarBadgeLista();
   function setAba(nome) {
     var temAtiva = abas.some(function (a) { return a.getAttribute('data-aba') === nome; });
     abas.forEach(function (a, i) {
@@ -1400,7 +1488,7 @@
       el('span', { class: 'cartao-link-seta' }, [svg(ICONES.seta)])
     ]);
     var instalar = cartaoInstalar();
-    var node = el('div', { class: 'inicio' }, [secBusca, secVeic, secaoMinhas(), chipsRecentes(), secLinhas, cartaoPlaca, instalar,
+    var node = el('div', { class: 'inicio' }, [secBusca, secVeic, secaoMinhas(), secaoLista(), chipsRecentes(), secLinhas, cartaoPlaca, instalar,
       el('p', { class: 'nota-legal', text: 'MG Peças Automotivas · Diadema-SP · Fabricante nacional de mangueiras, peças de arrefecimento, suspensão e plásticas.' })
     ]);
     mostrar(node);
@@ -1548,7 +1636,7 @@
         if (!guardou) { guardou = true; guardarBusca(termo); }
         if (lista.entendido) novo.appendChild(el('div', { class: 'res-cab' }, [el('p', { text: 'Buscamos também por “' + lista.entendido + '”.' })]));
         if (lista.parecido) novo.appendChild(status('Nenhum número original igual a “' + termo + '”. Estes têm um dígito diferente: confira o número gravado na peça.', 'aviso'));
-        novo.appendChild(painelResultados(lista, function (it) { return itemPeca(it.i, aplicacoesResumo(it.p[0])); }, false, filtroAntes, paginasAntes));
+        novo.appendChild(painelResultados(lista, function (it) { return itemPeca(it.i, aplicacoesResumo(it.p[0]), null, null, { lista: true }); }, false, filtroAntes, paginasAntes));
       }
       var y = window.scrollY;
       corpo.innerHTML = ''; corpo.appendChild(novo);
@@ -1618,7 +1706,7 @@
       btnComp.addEventListener('click', function () { compartilhar('Peças MG para ' + titulo, 'Peças MG para ' + titulo + (motor ? ' ' + motor : ''), urlApp(hashBusca)); });
       cab.appendChild(el('div', { class: 'res-acoes' }, [btnComp]));
       res.appendChild(painelResultados(itens, function (it) {
-        return itemPeca(it.i, '<b>' + esc(marca + ' ' + modelo) + '</b> ' + (it.a[3] ? esc(it.a[3]) + ' · ' : '') + esc(anoTexto(it.a)), it.mc === 1 && (cil || motor) ? 'Confirme o motor' : null);
+        return itemPeca(it.i, '<b>' + esc(marca + ' ' + modelo) + '</b> ' + (it.a[3] ? esc(it.a[3]) + ' · ' : '') + esc(anoTexto(it.a)), it.mc === 1 && (cil || motor) ? 'Confirme o motor' : null, null, { lista: true });
       }, true, linha));
     }).catch(function (e) { res.innerHTML = ''; res.appendChild(status('Não foi possível carregar as peças deste veículo. Verifique a conexão.', 'erro')); console.error(e); });
   }
@@ -1756,7 +1844,7 @@
       anunciar(plural(vis.length, 'peça', 'peças') + (filtro ? ' para ' + filtro : '') + ' em ' + l.nome);
       var ul = el('ul', { class: 'lista' }), pagina = 0, POR = 30;
       var mais = el('div', { class: 'mais' }, [el('button', { type: 'button', class: 'btn btn-neutro', text: 'Mostrar mais' })]);
-      function maisItens() { vis.slice(pagina * POR, (pagina + 1) * POR).forEach(function (it) { ul.appendChild(itemPeca(it.i, aplicacoesResumo(it.p[0]))); }); pagina++; mais.hidden = pagina * POR >= vis.length; }
+      function maisItens() { vis.slice(pagina * POR, (pagina + 1) * POR).forEach(function (it) { ul.appendChild(itemPeca(it.i, aplicacoesResumo(it.p[0]), null, null, { lista: true })); }); pagina++; mais.hidden = pagina * POR >= vis.length; }
       mais.querySelector('button').addEventListener('click', maisItens);
       res.appendChild(ul); res.appendChild(mais); maisItens();
       if ('IntersectionObserver' in window) { var io = new IntersectionObserver(function (es) { if (es[0].isIntersecting && !mais.hidden) maisItens(); }, { rootMargin: '400px' }); io.observe(mais); }
@@ -1803,7 +1891,12 @@
       var btnComp = el('button', { type: 'button', class: 'btn btn-neutro btn-acao' }, [svg(ICONES.compartilhar), 'Compartilhar']);
       /* o link vai pela página estática p/<código>.html (prévia com nome e foto da peça nos aplicativos de mensagem), que abre o app na ficha */
       btnComp.addEventListener('click', function () { compartilhar(p[1] + ' ' + p[0], p[1] + ' MG ' + p[0], urlApp('p/' + encodeURIComponent(p[0]) + '.html')); });
-      var acoesPeca = el('div', { class: 'linha-btn acoes-peca' }, [btnFav, btnComp]);
+      /* "Adicionar à lista": soma 1 em Minha lista (toast com "Ver lista"); o número no botão é a quantidade já na lista */
+      var btnLista = el('button', { type: 'button', class: 'btn btn-neutro btn-acao btn-lista' }, [svg(ICONES.listaMais), el('span', { text: 'Adicionar à lista' }), el('span', { class: 'btn-badge', 'aria-hidden': 'true', hidden: true })]);
+      function pintarLista() { var it = naLista(p[0]), b = btnLista.lastChild; b.hidden = !it; b.textContent = it ? String(it.qtd) : ''; btnLista.setAttribute('aria-label', 'Adicionar à lista' + (it ? ' (' + plural(it.qtd, 'unidade', 'unidades') + ' na lista)' : '')); }
+      btnLista.addEventListener('click', function () { adicionarComToast(p[0]); pintarLista(); });
+      pintarLista();
+      var acoesPeca = el('div', { class: 'linha-btn acoes-peca' }, [btnFav, btnComp, btnLista]);
       var cab = el('section', {}, [el('div', { class: 'detalhe-cod', text: p[0] }), el('div', { class: 'detalhe-nome', text: p[1] }), meta, d.e ? el('p', { class: 'ajuda', text: 'Embalagem: ' + d.e }) : null, acoesPeca]);
       var apl;
       if (d.a && d.a.length) {
@@ -1918,6 +2011,90 @@
       res.appendChild(confirmar);
       res.appendChild(listaMinhas(0, montar, ordemMinhas));
     }).catch(function (e) { res.innerHTML = ''; res.appendChild(status('Não foi possível carregar as peças salvas.', 'erro')); console.error(e); });
+  }
+  /* ---------- tela "Minha lista" (#/lista) ----------
+     Cartão por peça (foto, código, nome, linha) com × fora do link e o controle de quantidade (−, número editável, +);
+     total de peças e unidades; Enviar pelo WhatsApp (wa.me sem número), Copiar texto, Compartilhar (Web Share, quando
+     existe) e Limpar lista com confirmação em linha. Remover tem "Desfazer" no toast. Tudo funciona sem rede. */
+  function itemLista(x, aoMudar, aoRemover) {
+    var i = porCodigo[x.codigo], p = produtos[i];
+    var li = itemPeca(i, esc(linhaDe(p[0]).nome), null, aoRemover, { rotuloRemover: 'da lista' });
+    li.classList.add('lista-item'); li.setAttribute('data-cod', p[0]);
+    var menos = el('button', { type: 'button', class: 'qtd-btn', 'aria-label': 'Uma unidade a menos de ' + p[0], text: '−' });
+    var mais = el('button', { type: 'button', class: 'qtd-btn', 'aria-label': 'Uma unidade a mais de ' + p[0], text: '+' });
+    var num = el('input', { type: 'number', class: 'qtd-num', inputmode: 'numeric', min: '1', max: String(QTD_MAX), step: '1', value: String(x.qtd), 'aria-label': 'Quantidade de ' + p[0] });
+    function aplicar(q) {
+      q = qtdValida(q); definirQtdLista(p[0], q); num.value = String(q);
+      var ativo = document.activeElement;
+      menos.disabled = q <= 1; mais.disabled = q >= QTD_MAX;
+      if ((ativo === menos && menos.disabled) || (ativo === mais && mais.disabled)) num.focus(); /* o botão que desativou não fica com o foco perdido */
+      aoMudar();
+    }
+    menos.addEventListener('click', function () { aplicar((+num.value || 1) - 1); });
+    mais.addEventListener('click', function () { aplicar((+num.value || 0) + 1); });
+    num.addEventListener('change', function () { aplicar(num.value); }); /* vazio, 0 ou letra vira 1; acima de 999 vira 999 */
+    /* Enter: aplica; no toque também tira o foco (fecha o teclado); no computador o foco fica no número, selecionado */
+    num.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); aplicar(num.value); if (matchMedia('(pointer: coarse)').matches) num.blur(); else num.select(); } });
+    num.addEventListener('focus', function () { num.select(); });
+    menos.disabled = x.qtd <= 1; mais.disabled = x.qtd >= QTD_MAX;
+    li.appendChild(el('div', { class: 'lista-qtd', role: 'group', 'aria-label': 'Quantidade de ' + p[0] }, [menos, num, mais, el('span', { class: 'qtd-un', 'aria-hidden': 'true', text: 'un.' })]));
+    return li;
+  }
+  function telaLista() {
+    setTopo({ titulo: 'Minha lista', voltarPara: '#/' }); setAba('lista');
+    var res = el('div'), node = el('div', {}, [res]);
+    mostrar(node); res.appendChild(esqueleto(3));
+    function montar(focar) {
+      res.innerHTML = '';
+      var l = listaValida();
+      if (!l.length) {
+        res.appendChild(vazio('Lista vazia', 'Toque em “Adicionar à lista” na ficha de uma peça ou no “+” de um resultado da busca. A lista fica só neste aparelho; depois é só enviar pelo WhatsApp ou copiar o texto.', [el('a', { class: 'btn btn-contorno', href: '#/busca', text: 'Buscar peça' })]));
+        if (focar) { var f = res.querySelector('a.btn'); if (f) f.focus(); }
+        return;
+      }
+      var cont = el('p', { class: 'lista-cont' }), pre = el('pre', { class: 'lista-texto-pre', tabindex: '0' });
+      var btnZap = el('a', { class: 'btn btn-primario btn-zap', href: '#', target: '_blank', rel: 'noopener' }, [svg(ICONES.conversa), 'Enviar pelo WhatsApp']);
+      var btnCopiar = el('button', { type: 'button', class: 'btn btn-neutro btn-copiar-lista' }, [svg(ICONES.copiar), 'Copiar texto']);
+      var btnComp = navigator.share ? el('button', { type: 'button', class: 'btn btn-neutro btn-comp-lista' }, [svg(ICONES.compartilhar), 'Compartilhar']) : null;
+      function texto() { return textoLista(listaValida()); }
+      function atualizar() {
+        var tx = texto();
+        cont.textContent = resumoLista(totaisLista(listaValida())) + ' neste aparelho';
+        btnZap.href = urlWhatsApp(tx); pre.textContent = tx;
+      }
+      btnCopiar.addEventListener('click', function () { copiarTexto(texto()).then(function () { toast('Texto da lista copiado'); }).catch(function () { toast('Não foi possível copiar.'); }); });
+      if (btnComp) btnComp.addEventListener('click', function () { navigator.share({ title: 'Lista de peças MG', text: texto() }).catch(function (e) { if (e && e.name !== 'AbortError') btnCopiar.click(); }); });
+      /* "Limpar lista" com confirmação em linha (como em Minhas peças) */
+      var limpar = el('button', { type: 'button', class: 'link-acao btn-limpar-lista' }, [svg(ICONES.fechar), 'Limpar lista']);
+      var txtConf = el('p', { tabindex: '-1' });
+      var btnCancelar = el('button', { type: 'button', class: 'btn btn-mini btn-neutro', text: 'Cancelar' });
+      var btnApagar = el('button', { type: 'button', class: 'btn btn-mini btn-primario', text: 'Apagar' });
+      var confirmar = el('div', { class: 'status aviso confirmar', role: 'group', 'aria-label': 'Confirmar', hidden: true }, [svg(ICONES.aviso), el('div', { class: 'confirmar-corpo' }, [txtConf, el('div', { class: 'linha-btn' }, [btnCancelar, btnApagar])])]);
+      limpar.addEventListener('click', function () { var n = listaValida().length; txtConf.textContent = 'Apagar ' + (n === 1 ? 'a peça da lista' : 'as ' + n + ' peças da lista') + ' deste aparelho? Não é possível desfazer.'; confirmar.hidden = false; limpar.disabled = true; txtConf.focus(); });
+      btnCancelar.addEventListener('click', function () { confirmar.hidden = true; limpar.disabled = false; limpar.focus(); });
+      btnApagar.addEventListener('click', function () { limparLista(); toast('Lista apagada'); montar(true); });
+      var ul = el('ul', { class: 'lista lista-itens' });
+      function remover(c, li) {
+        var r = removerLista(c); if (!r) return;
+        var prox = li.nextElementSibling || li.previousElementSibling;
+        li.remove();
+        if (!listaValida().length) montar(true);
+        else { atualizar(); var f = prox ? prox.querySelector('.item-remover') : btnZap; if (f) f.focus(); }
+        toast(c + ' removida da lista', { texto: 'Desfazer', aoTocar: function () {
+          devolverLista(r); montar();
+          var alvo = null; Array.prototype.forEach.call(res.querySelectorAll('.lista-item'), function (n) { if (n.getAttribute('data-cod') === c) alvo = n; });
+          if (alvo) alvo.querySelector('.item-remover').focus();
+        } });
+      }
+      l.forEach(function (x) { ul.appendChild(itemLista(x, atualizar, remover)); });
+      res.appendChild(el('div', { class: 'res-cab' }, [el('h2', { class: 'visualmente-oculto', text: 'Peças da lista' }), cont]));
+      res.appendChild(el('div', { class: 'cartao lista-acoes' }, [el('div', { class: 'linha-btn' }, [btnZap, btnCopiar, btnComp]), el('p', { class: 'ajuda', text: 'O texto traz só o código MG, o nome e a quantidade, sem valores. A lista fica guardada só neste aparelho.' })]));
+      res.appendChild(ul);
+      res.appendChild(el('details', { class: 'cartao lista-texto' }, [el('summary', { text: 'Ver o texto da lista' }), pre]));
+      res.appendChild(el('div', { class: 'lista-rodape' }, [limpar, confirmar]));
+      atualizar();
+    }
+    dadosBase().then(function () { montar(); }).catch(function (e) { res.innerHTML = ''; res.appendChild(status('Não foi possível carregar a lista. Verifique a conexão.', 'erro')); console.error(e); });
   }
   function telaSobre() {
     setTopo({ titulo: 'Sobre a MG', voltarPara: '#/' }); setAba('');
@@ -2064,6 +2241,7 @@
     lembrarRolagem(); /* posição da tela que está saindo (ou da atual, quando só o tema muda) */
     idTela = idDaEntrada(); rolagemAlvo = rolagens[idTela] || 0; /* entrada já visitada (voltar/avançar): abre onde estava */
     var r = rota();
+    pintarBadgeLista(); /* a lista pode ter mudado fora deste código (outra aba do navegador): o contador da aba acompanha */
     /* no Início já existe o cartão "Instale o app": a faixa flutuante de instalar fica só nas outras telas (CSS .rota-inicio) */
     document.body.classList.toggle('rota-inicio', r.nome === '');
     document.body.classList.toggle('rota-instalar', r.nome === 'instalar'); /* a tela Instalar já tem o botão: a faixa flutuante some nela (CSS) */
@@ -2076,6 +2254,7 @@
       case 'linha': telaLinha(r.partes[1], r.q); break;
       case 'peca': telaPeca(r.partes[1]); break;
       case 'minhas': telaMinhas(); break;
+      case 'lista': telaLista(); break;
       case 'sobre': telaSobre(); break;
       case 'instalar': telaInstalar(); break;
       /* endereço desconhecido (link antigo ou digitado errado): avisa e volta ao Início */
@@ -2154,7 +2333,8 @@
   }
   /* toast: um único elemento fixo (região viva no index.html), por isso o leitor de tela anuncia cada mensagem */
   var toastTimer = null, toastEl = document.getElementById('toast');
-  /* acao (opcional): { texto, href } vira um link no toast (ex.: "Ver" abre Minhas peças); com ação o toast fica 6 s */
+  /* acao (opcional): { texto, href } vira um link no toast (ex.: "Ver" abre Minhas peças); { texto, aoTocar } vira um botão
+     (ex.: "Desfazer" em Minha lista); com ação o toast fica 6 s */
   function toast(msg, acao) {
     toastEl.hidden = true; toastEl.textContent = ''; toastEl.classList.remove('com-acao');
     clearTimeout(toastTimer);
@@ -2162,8 +2342,8 @@
       toastEl.textContent = '';
       toastEl.appendChild(el('span', { class: 'toast-txt', text: msg }));
       if (acao) {
-        var a = el('a', { class: 'toast-acao', href: acao.href, text: acao.texto });
-        a.addEventListener('click', function () { toastEl.hidden = true; });
+        var a = acao.aoTocar ? el('button', { type: 'button', class: 'toast-acao', text: acao.texto }) : el('a', { class: 'toast-acao', href: acao.href, text: acao.texto });
+        a.addEventListener('click', function () { toastEl.hidden = true; toastEl.textContent = ''; if (acao.aoTocar) acao.aoTocar(); });
         toastEl.appendChild(a); toastEl.classList.add('com-acao');
       }
       toastEl.hidden = false;
@@ -2220,7 +2400,7 @@
   }
 
   /* ---------- início ---------- */
-  window.MG_APP = { buscarTexto: buscarTexto, buscarVeiculo: buscarVeiculo, urlMercadoLivre: urlMercadoLivre, casarVeiculo: casarVeiculo, dados: function () { return dadosBase().then(function () { return { indice: indice, produtos: produtos }; }); } };
+  window.MG_APP = { buscarTexto: buscarTexto, buscarVeiculo: buscarVeiculo, textoLista: function () { return dadosBase().then(function () { return textoLista(listaValida()); }); }, urlMercadoLivre: urlMercadoLivre, casarVeiculo: casarVeiculo, dados: function () { return dadosBase().then(function () { return { indice: indice, produtos: produtos }; }); } };
   renderizar();
   /* recarregou pelo "Atualizar": confirma com a versão que está rodando, uma vez só (a marca da sessão é apagada) e só se a
      versão de fato mudou (recarga sem SW novo, ou a marca presa por um controllerchange que não veio, não avisa nada) */
