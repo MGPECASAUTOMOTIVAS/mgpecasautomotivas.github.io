@@ -443,7 +443,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .versao { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .versao .ajuda { margin: 0; }
 .versao .btn { width: auto; }
-.sobre-logo { width: 236px; margin: 8px auto 16px; padding: 10px 14px; border-radius: 12px; background: var(--logo-chip); }
+.sobre-logo { width: 236px; height: auto; margin: 8px auto 16px; padding: 10px 14px; border-radius: 12px; background: var(--logo-chip); }
 .lista-sobre { list-style: none; margin: 0; padding: 0; }
 .lista-sobre li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--borda); }
 .lista-sobre li:first-child { border-top: 0; }

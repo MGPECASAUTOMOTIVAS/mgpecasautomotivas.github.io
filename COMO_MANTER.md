@@ -66,8 +66,8 @@ git push origin main
 ## 4. Como mudar a versão
 A versão tem que mudar a cada publicação, senão o celular continua com os arquivos antigos. São dois lugares, com
 o mesmo texto (formato ano.mês.dia-número):
-- `config.js` → linha `versao: '2026.11.02-25'`
-- `sw.js` → linha `var VERSAO = '2026.11.02-25';`
+- `config.js` → linha `versao: '2026.11.02-26'`
+- `sw.js` → linha `var VERSAO = '2026.11.02-26';`
 Se os dois ficarem diferentes, o teste do item 5 acusa.
 
 ## 5. Como rodar o teste
@@ -76,8 +76,8 @@ Precisa do Node.js e do Playwright com o Chromium (uma vez só: `npm install -g 
 ```
 node teste/fumaca.js
 ```
-Em uns 10 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, compartilhar, instalar, versão,
-uso sem internet) e termina com `110/110 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
+Em uns 15 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, compartilhar, instalar, versão,
+uso sem internet) e termina com `116/116 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
 Para guardar capturas de tela: `node teste/fumaca.js --capturas pasta_das_capturas`.
 
 ## 6. Onde estão as regras

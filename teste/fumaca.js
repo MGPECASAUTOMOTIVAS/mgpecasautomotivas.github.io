@@ -67,6 +67,12 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   var faltando = casca.filter(function (a) { return a !== './' && !fs.existsSync(path.join(APP, a)); });
   ok(!faltando.length, 'todos os arquivos do pré-cache existem' + (faltando.length ? ': faltam ' + faltando.join(', ') : ''));
   ok(!casca.some(function (a) { return /teste/.test(a); }) && /teste\\\//.test(sw), 'teste/ fora do pré-cache e ignorado pelo service worker');
+  /* instalável: manifesto com id/start_url/scope/display, ícones 192 e 512 any e maskable (arquivos existem), apple-touch-icon e metas do iPhone */
+  var man = JSON.parse(fs.readFileSync(path.join(APP, 'manifest.webmanifest'), 'utf8')), indexHtml = fs.readFileSync(path.join(APP, 'index.html'), 'utf8');
+  function temIcone(tam, uso) { return man.icons.some(function (i) { return i.sizes === tam + 'x' + tam && i.purpose === uso && fs.existsSync(path.join(APP, i.src)); }); }
+  ok(man.name && man.short_name && man.id && man.start_url && man.scope && man.display === 'standalone' && man.theme_color && man.background_color, 'manifest.webmanifest com name, short_name, id, start_url, scope, display standalone e cores');
+  ok(temIcone(192, 'any') && temIcone(512, 'any') && temIcone(192, 'maskable') && temIcone(512, 'maskable'), 'ícones 192/512 any e maskable do manifesto existem em icones/');
+  ok(/rel="apple-touch-icon"[^>]*href="icones\/apple-touch-icon.png"/.test(indexHtml) && fs.existsSync(path.join(APP, 'icones', 'apple-touch-icon.png')) && /apple-mobile-web-app-capable/.test(indexHtml) && /apple-mobile-web-app-title/.test(indexHtml) && (indexHtml.match(/name="theme-color"/g) || []).length === 2, 'apple-touch-icon, metas apple-mobile-web-app-* e theme-color claro/escuro no index.html');
   /* linha de cada peça nos arquivos pequenos (gerar_detalhes.py): 5º campo de produtos.json = posição em indice.json "linhas" */
   var indiceJson = JSON.parse(fs.readFileSync(path.join(APP, 'dados', 'indice.json'), 'utf8')), produtosJson = JSON.parse(fs.readFileSync(path.join(APP, 'dados', 'produtos.json'), 'utf8'));
   ok(Array.isArray(indiceJson.linhas) && indiceJson.linhas.length === 14, 'indice.json traz a lista "linhas" (14)');
@@ -325,6 +331,11 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   igual(await page.textContent('#conteudo .versao b'), versao, 'Sobre mostra a versão do config.js');
   await page.waitForFunction(function () { return /atualizados em \d/.test(document.querySelector('#conteudo .dados-info').textContent); });
   ok(true, 'datas dos dados no Sobre');
+  /* logo do topo e do Sobre com width/height (proporção conhecida antes de carregar, sem pulo) e desenhado na proporção original */
+  function medirLogos() { return page.$$eval('.topo-logo, .sobre-logo', function (ls) { return ls.map(function (i) { var r = i.getBoundingClientRect(), cs = getComputedStyle(i), w = r.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), h = r.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom); return { attr: i.getAttribute('width') + 'x' + i.getAttribute('height'), prop: w / h, natural: i.naturalWidth / i.naturalHeight }; }); }); }
+  var logos = await medirLogos(); /* Sobre: .sobre-logo (o topo mostra o botão Voltar) */
+  await ir(page, '#/', '.secao-busca .entrada'); logos = logos.concat(await medirLogos()); /* Início: .topo-logo */
+  ok(logos.length === 2 && logos.every(function (l) { return /^\d+x\d+$/.test(l.attr) && Math.abs(l.prop - l.natural) < 0.05; }), 'logo do topo e do Sobre com width/height e na proporção original (' + logos.map(function (l) { return l.attr + ' → ' + l.prop.toFixed(2); }).join(', ') + ')');
 
   console.log('\nEndereços');
   await page.evaluate(function () { location.hash = '#/nao-existe'; });
@@ -404,6 +415,10 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await pg.goto(base + '#/'); await pg.waitForSelector('.secao-busca .entrada');
   var swOk = await pg.evaluate(function () { return navigator.serviceWorker.ready.then(function (r) { return !!r.active; }); });
   ok(swOk, 'service worker registrado e ativo');
+  igual(await pg.evaluate(function () { return navigator.serviceWorker.getRegistration().then(function (r) { return r.scope; }); }), base, 'service worker com escopo na raiz');
+  var cdp = await ctx2.newCDPSession(pg), instErros = (await cdp.send('Page.getInstallabilityErrors')).installabilityErrors;
+  ok(!instErros.length, 'Chrome não aponta erro de instalabilidade (manifesto, ícones, service worker)' + (instErros.length ? ': ' + JSON.stringify(instErros) : ''));
+  await cdp.detach();
   await pg.reload(); await pg.waitForSelector('.secao-busca .entrada');
   ok(await pg.evaluate(function () { return !!navigator.serviceWorker.controller; }), 'página controlada pelo service worker');
   await ir(pg, '#/peca/MG001', 'table.tabela tbody tr'); /* detalhes.json pedido pela ficha e guardado pelo SW */

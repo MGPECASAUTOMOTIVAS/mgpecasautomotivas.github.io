@@ -1277,7 +1277,7 @@
   function setTopo(o) {
     topo.innerHTML = '';
     if (o.inicio) {
-      topo.appendChild(el('a', { class: 'topo-logo-link', href: '#/', 'aria-label': 'MG Peças Automotivas – início' }, [el('img', { class: 'topo-logo', src: logoSrc(), alt: 'MG Peças Automotivas', height: '34' })]));
+      topo.appendChild(el('a', { class: 'topo-logo-link', href: '#/', 'aria-label': 'MG Peças Automotivas – início' }, [el('img', { class: 'topo-logo', src: logoSrc(), alt: 'MG Peças Automotivas', width: '708', height: '267' })]));
       topo.appendChild(botaoTema());
       topo.appendChild(el('a', { class: 'btn-icone', href: '#/sobre', 'aria-label': 'Sobre a MG' }, [svg(ICONES.info)]));
     } else {
@@ -1940,7 +1940,7 @@
     });
     var node = el('div', {}, [
       el('section', { class: 'cartao', style: 'text-align:center' }, [
-        el('img', { class: 'sobre-logo', src: logoSrc(), alt: 'MG Peças Automotivas' }),
+        el('img', { class: 'sobre-logo', src: logoSrc(), alt: 'MG Peças Automotivas', width: '708', height: '267' }),
         el('h2', { text: 'MG Peças Automotivas' }),
         el('p', { class: 'chamada', text: 'Fabricante nacional de mangueiras do filtro de ar, peças de arrefecimento, respiro, reservatórios, suspensão, metal-borracha e peças plásticas para a linha leve e pesada.' })
       ]),
