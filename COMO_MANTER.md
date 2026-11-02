@@ -14,6 +14,12 @@ Guia curto para o Filipe. Tudo o que está aqui foi testado em 02/11/2026.
   "Adicionar à lista" na ficha ou o "+" nos resultados) e manda pelo WhatsApp (sem número de destino: a pessoa escolhe
   para quem) ou copia o texto. Fica guardada só no aparelho (`localStorage`, chave `mg-lista`, como `mg-favoritos` para
   Minhas peças); nada passa por servidor; o texto traz só código, nome e quantidade, sem valores, e o link do app.
+- **Imprimir / PDF**: botão na Minha lista, na ficha da peça e na lista de peças de um veículo (ao lado da ordem). Abre a
+  caixa de impressão do navegador; no celular ela tem a opção "Salvar como PDF" (no iPhone, a folha de compartilhar do
+  sistema). A folha sai limpa, em preto no branco, com o logo da MG, a data, a tabela (lista: quantidade, código, nome e
+  linha; ficha: foto, aplicação completa e números originais; veículo: código, nome, linha e aplicação de todas as peças, na
+  ordem e com o filtro da tela) e um QR code do link. Sem valores nem contato. Ctrl+P no computador imprime a mesma folha.
+  Tudo é montado no aparelho (CSS `@media print` em `app.css`, seção `#impressao` em `app.js`); nada vai para servidor.
 - Endereço no ar: https://mgpecasautomotivas.github.io/
 - Os arquivos ficam em dois lugares:
   - **Repositório** `MGPECASAUTOMOTIVAS/mgpecasautomotivas.github.io` no GitHub (organização da MG) → a raiz dele é o que
@@ -70,8 +76,8 @@ git push origin main
 ## 4. Como mudar a versão
 A versão tem que mudar a cada publicação, senão o celular continua com os arquivos antigos. São dois lugares, com
 o mesmo texto (formato ano.mês.dia-número):
-- `config.js` → linha `versao: '2026.11.02-27'`
-- `sw.js` → linha `var VERSAO = '2026.11.02-27';`
+- `config.js` → linha `versao: '2026.11.02-28'`
+- `sw.js` → linha `var VERSAO = '2026.11.02-28';`
 Se os dois ficarem diferentes, o teste do item 5 acusa.
 
 ## 5. Como rodar o teste
@@ -80,8 +86,8 @@ Precisa do Node.js e do Playwright com o Chromium (uma vez só: `npm install -g 
 ```
 node teste/fumaca.js
 ```
-Em uns 20 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, Minha lista, compartilhar, instalar,
-versão, uso sem internet) e termina com `155/155 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
+Em uns 20 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, Minha lista, Imprimir / PDF, compartilhar,
+instalar, versão, uso sem internet) e termina com `181/181 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
 Para guardar capturas de tela: `node teste/fumaca.js --capturas pasta_das_capturas`.
 
 ## 6. Onde estão as regras

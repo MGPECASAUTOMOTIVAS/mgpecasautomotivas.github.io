@@ -17,5 +17,5 @@ self.MG_CONFIG = {
   urlApp: 'https://mgpecasautomotivas.github.io/',
   mlSufixo: 'MG Mangueiras - MG Peças Automotivas',
   mlMarcaId: '64522',
-  versao: '2026.11.02-27'
+  versao: '2026.11.02-28'
 };

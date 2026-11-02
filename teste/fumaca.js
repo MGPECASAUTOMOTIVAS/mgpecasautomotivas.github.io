@@ -96,6 +96,8 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
     try { Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); } catch (e) {}
     var cb = { writeText: function (t) { window.__copiado = t; return Promise.resolve(); } };
     try { Object.defineProperty(navigator, 'clipboard', { value: cb, configurable: true }); } catch (e) {}
+    /* impressão: window.print() só conta as chamadas (a caixa de impressão não abre no teste; afterprint é disparado à mão) */
+    window.__imprimiu = 0; window.print = function () { window.__imprimiu++; };
   });
   var page = await ctx.newPage(), erros = [];
   colher(page, erros);
@@ -324,7 +326,7 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   /* ficha: adicionar (qtd 1) e somar 1 */
   await ir(page, '#/peca/MG001', '.btn-lista');
   var btnListaBox = await (await page.$('#conteudo .btn-lista')).boundingBox();
-  ok(btnListaBox.height >= 44 && (await page.textContent('#conteudo .btn-lista')).trim() === 'Adicionar à lista' && (await page.$$('#conteudo .acoes-peca .btn')).length === 3, 'botão "Adicionar à lista" na ficha, junto de Salvar peça e Compartilhar, com 44 px');
+  ok(btnListaBox.height >= 44 && (await page.textContent('#conteudo .btn-lista')).trim() === 'Adicionar à lista' && (await page.$$('#conteudo .acoes-peca .btn')).length === 4, 'botão "Adicionar à lista" na ficha, junto de Salvar peça, Compartilhar e Imprimir / PDF, com 44 px');
   await page.click('#conteudo .btn-lista');
   await page.waitForFunction(function () { var t = document.getElementById('toast'); return !t.hidden && /Na lista/.test(t.textContent); });
   igual(await page.textContent('#toast .toast-txt'), 'Na lista', 'toast "Na lista"');
@@ -408,6 +410,89 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   ok(limpo.ls === '[]' && !limpo.badge && limpo.foco === 'Buscar peça', 'Apagar: lista vazia no aparelho, sem contador na aba, foco em "Buscar peça"');
   await ir(page, '#/', '.secao-busca .entrada');
   ok(await page.evaluate(function () { return document.querySelector('#conteudo .secao-lista').hidden; }), 'Início sem a seção "Minha lista" com a lista vazia');
+
+  console.log('\nImprimir / PDF');
+  /* folha limpa (#impressao + body.imprimindo) montada só no toque, window.print() direto; preto no branco, igual nos dois temas, sem valores */
+  var detalhesJson = JSON.parse(fs.readFileSync(path.join(APP, 'dados', 'detalhes.json'), 'utf8')).itens;
+  var PROIBIDO = /pre[çc]o|R\$|pedido|compr|desconto|oferta|frete|promo|barato|whatsapp|@/i;
+  await page.evaluate(function () { localStorage.setItem('mg-lista', JSON.stringify([{ codigo: 'MG001', qtd: 2, adicionadoEm: '2026-11-02T15:00:00.000Z' }, { codigo: 'MG076', qtd: 1, adicionadoEm: '2026-11-02T15:01:00.000Z' }, { codigo: 'MG1903', qtd: 4, adicionadoEm: '2026-11-02T15:02:00.000Z' }])); window.__imprimiu = 0; });
+  await ir(page, '#/lista', '.lista-acoes .btn-imprimir');
+  var btnImp = await page.evaluate(function () { var b = document.querySelector('#conteudo .lista-acoes .btn-imprimir'), r = b.getBoundingClientRect(); return { h: r.height, w: r.width, txt: b.textContent.trim(), svg: !!b.querySelector('svg'), tipo: b.type, folha: !!document.getElementById('impressao'), irmaos: b.parentNode.querySelectorAll('.btn').length }; });
+  ok(btnImp.h >= 44 && btnImp.w >= 44 && btnImp.txt === 'Imprimir / PDF' && btnImp.svg && btnImp.tipo === 'button' && btnImp.irmaos === 3 && !btnImp.folha, 'Minha lista: botão "Imprimir / PDF" com ícone e 44 px junto de WhatsApp/Copiar; sem folha antes do toque');
+  function lerFolha() {
+    return page.evaluate(function () {
+      var s = document.getElementById('impressao'); if (!s) return null;
+      function tx(sel) { return Array.prototype.map.call(s.querySelectorAll(sel), function (e) { return e.textContent.trim(); }); }
+      return { print: window.__imprimiu, classe: document.body.classList.contains('imprimindo'), titulo: s.querySelector('h1').textContent, data: s.querySelector('.imp-data').textContent, logo: s.querySelector('.imp-logo') && s.querySelector('.imp-logo').getAttribute('src'),
+        cab: tx('thead th'), linhas: tx('tbody tr').length, l1: tx('tbody tr:first-child td'), cods: tx('tbody td.imp-cod-col'), qr: !!s.querySelector('.imp-qr svg'), rodape: s.querySelector('.imp-rodape').textContent, link: s.querySelector('.imp-link') ? s.querySelector('.imp-link').textContent : '',
+        texto: s.textContent, docTitle: document.title, display: getComputedStyle(s).display, html: s.innerHTML, cod: s.querySelector('.imp-cod') ? s.querySelector('.imp-cod').textContent : '', nome: s.querySelector('.imp-nome') ? s.querySelector('.imp-nome').textContent : '', linha: s.querySelector('.imp-linha') ? s.querySelector('.imp-linha').textContent : '', foto: s.querySelector('.imp-foto') ? s.querySelector('.imp-foto').getAttribute('src') : '', oem: s.querySelector('.imp-oem') ? s.querySelector('.imp-oem').textContent : '' };
+    });
+  }
+  await page.click('#conteudo .lista-acoes .btn-imprimir');
+  var folhaL = await lerFolha();
+  ok(folhaL && folhaL.print === 1 && folhaL.classe, 'toque chama window.print() uma vez com a folha #impressao montada e body.imprimindo');
+  ok(folhaL && folhaL.titulo === 'Lista de peças MG' && folhaL.data === '3 peças · 7 unidades · Impresso em ' + hoje && folhaL.logo === 'icones/logo-mg.png', 'cabeçalho: logo original, "Lista de peças MG", totais e data (' + (folhaL && folhaL.data) + ')');
+  ok(folhaL && folhaL.cab.join('|') === 'Qtd|Código|Nome|Linha' && folhaL.linhas === 3 && folhaL.l1.join('|') === '2|MG001|Mangueira do Filtro de Ar|Mangueiras do Filtro de Ar', 'tabela qtd/código/nome/linha com as 3 peças (1ª: 2 · MG001 · Mangueira do Filtro de Ar · Mangueiras do Filtro de Ar)');
+  ok(folhaL && folhaL.qr && folhaL.rodape.indexOf('Catálogo MG Peças Automotivas · https://mgpecasautomotivas.github.io/') >= 0, 'rodapé com "Catálogo MG Peças Automotivas · link" e QR code (qr.js)');
+  ok(folhaL && !PROIBIDO.test(folhaL.texto), 'folha sem valores, sem "pedido", sem palavras de venda e sem contato');
+  ok(folhaL && folhaL.docTitle === 'Lista de peças MG · MG Peças' && folhaL.display === 'none', 'título do documento vira o nome do PDF; na tela a folha fica invisível');
+  await page.emulateMedia({ media: 'print' });
+  function lerImpressao() {
+    return page.evaluate(function () { var s = document.getElementById('impressao'), cs = getComputedStyle(s); return { d: cs.display, cor: cs.color, fundo: cs.backgroundColor, body: getComputedStyle(document.body).backgroundColor, abas: getComputedStyle(document.querySelector('.abas')).display, topo: getComputedStyle(document.querySelector('.topo')).display, conteudo: getComputedStyle(document.getElementById('conteudo')).display, toast: getComputedStyle(document.getElementById('toast')).display, faixa: getComputedStyle(document.getElementById('faixa-instalar')).display, fonte: cs.fontFamily, thead: getComputedStyle(s.querySelector('thead')).display, tr: getComputedStyle(s.querySelector('tbody tr')).breakInside, h1: getComputedStyle(s.querySelector('h1')).color }; });
+  }
+  var impL = await lerImpressao();
+  ok(impL.d === 'block' && impL.cor === 'rgb(0, 0, 0)' && impL.fundo === 'rgb(255, 255, 255)' && impL.body === 'rgb(255, 255, 255)' && impL.h1 === 'rgb(0, 0, 0)', 'na impressão a folha aparece em preto no branco');
+  ok(impL.abas === 'none' && impL.topo === 'none' && impL.conteudo === 'none' && impL.toast === 'none' && impL.faixa === 'none', 'na impressão somem topo, abas, conteúdo da tela, toast e faixa de instalar');
+  ok(/system-ui/.test(impL.fonte) && impL.thead === 'table-header-group' && impL.tr === 'avoid', 'fontes do sistema, thead repetido a cada página e linhas sem cortar (break-inside: avoid)');
+  await page.emulateMedia({ media: 'screen' });
+  await page.evaluate(function () { window.dispatchEvent(new Event('afterprint')); });
+  ok(await page.evaluate(function () { return !document.getElementById('impressao') && !document.body.classList.contains('imprimindo') && document.title === 'Minha lista · MG Peças'; }), 'afterprint tira a folha e a classe e devolve o título da tela');
+  /* tema escuro: a folha sai igual (mesmo HTML, mesmas cores na impressão) */
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await ir(page, '#/', '.secao-busca .entrada'); await ir(page, '#/lista', '.lista-acoes .btn-imprimir');
+  await page.click('#conteudo .lista-acoes .btn-imprimir');
+  var folhaE = await lerFolha();
+  await page.emulateMedia({ media: 'print' }); var impE = await lerImpressao(); await page.emulateMedia({ media: 'screen' });
+  ok(folhaE && folhaE.html === folhaL.html && impE.cor === impL.cor && impE.fundo === impL.fundo && impE.body === impL.body, 'tema escuro: a folha tem o mesmo HTML e sai em preto no branco do mesmo jeito');
+  await page.emulateMedia({ colorScheme: 'light' });
+  /* trocar de tela tira a folha (se a caixa de impressão não avisou afterprint) */
+  await ir(page, '#/peca/MG001', '.acoes-peca .btn-imprimir');
+  ok(await page.evaluate(function () { return !document.getElementById('impressao') && !document.body.classList.contains('imprimindo'); }), 'trocar de tela tira a folha pendente');
+  /* ficha: 4 botões de 44 px, 2 por linha em 390 */
+  var acoes4 = await page.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('#conteudo .acoes-peca .btn'), function (b) { var r = b.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height), b.textContent.trim()]; }); });
+  ok(acoes4.length === 4 && acoes4.every(function (a) { return a[1] >= 44; }) && acoes4[0][0] === acoes4[1][0] && acoes4[2][0] === acoes4[3][0] && acoes4[2][0] > acoes4[0][0] && acoes4[3][2] === 'Imprimir / PDF', 'ficha: Salvar peça, Compartilhar, Adicionar à lista e Imprimir / PDF com 44 px, 2 por linha (' + JSON.stringify(acoes4) + ')');
+  await page.waitForFunction(function () { return !!document.querySelector('#conteudo .detalhe-foto .foto.ok img'); });
+  await page.evaluate(function () { window.__imprimiu = 0; });
+  await page.click('#conteudo .acoes-peca .btn-imprimir');
+  var folhaF = await lerFolha(), dMG001 = detalhesJson.MG001;
+  ok(folhaF && folhaF.print === 1 && folhaF.titulo === 'Ficha da peça MG001' && folhaF.data === 'Mangueira do Filtro de Ar · Impresso em ' + hoje && folhaF.cod === 'MG001' && folhaF.nome === 'Mangueira do Filtro de Ar', 'ficha: folha "Ficha da peça MG001" com código, nome e data');
+  ok(folhaF && folhaF.linha === 'Linha: Mangueiras do Filtro de Ar · ' + dMG001.m.join(', ') && /^http/.test(folhaF.foto), 'ficha: linha, montadoras e a foto já carregada (' + folhaF.linha + ')');
+  ok(folhaF && folhaF.cab.join('|') === 'Veículo|Motor|Anos' && folhaF.linhas === dMG001.a.length && folhaF.l1.join('|') === dMG001.a[0].join('|'), 'ficha: tabela de aplicação completa (' + dMG001.a.length + ' linhas, 1ª ' + dMG001.a[0].join(' · ') + ')');
+  ok(folhaF && folhaF.oem === dMG001.o.join('   ') && folhaF.link === 'https://mgpecasautomotivas.github.io/p/MG001.html' && folhaF.qr, 'ficha: números originais, link da prévia p/MG001.html e QR code');
+  ok(folhaF && !PROIBIDO.test(folhaF.texto) && folhaF.docTitle === 'Ficha da peça MG001 · MG Peças', 'ficha: folha sem valores nem contato; nome do PDF "Ficha da peça MG001"');
+  /* veículo: botão ao lado da ordem (só o ícone no celular), todas as peças na ordem da tela, filtro e ordem respeitados */
+  await ir(page, '#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.res-barra .btn-imprimir');
+  var btnV = await page.evaluate(function () { var b = document.querySelector('#conteudo .res-barra .btn-imprimir'), r = b.getBoundingClientRect(), s = document.querySelector('#conteudo .res-barra .select-mini').getBoundingClientRect(); return { w: r.width, h: r.height, label: b.getAttribute('aria-label'), txt: getComputedStyle(b.querySelector('.btn-imprimir-txt')).display, mesmaLinha: Math.abs(r.top - s.top) < 4 && r.left > s.right, total: +document.querySelector('#conteudo .res-cont b').textContent, cods: Array.prototype.map.call(document.querySelectorAll('#conteudo .painel-res .item-cod'), function (e) { return e.textContent; }) }; });
+  ok(btnV.w >= 44 && btnV.h >= 44 && btnV.label === 'Imprimir / PDF' && btnV.txt === 'none' && btnV.mesmaLinha, 'veículo: botão de 44 px só com o ícone (nome acessível "Imprimir / PDF") ao lado da ordem');
+  await page.evaluate(function () { window.__imprimiu = 0; });
+  await page.click('#conteudo .res-barra .btn-imprimir');
+  var folhaV = await lerFolha();
+  ok(folhaV && folhaV.print === 1 && folhaV.titulo === 'Peças MG para Volkswagen Gol 2010 1.6' && folhaV.data === btnV.total + ' peças · Impresso em ' + hoje && folhaV.cab.join('|') === 'Código|Nome|Linha|Aplicação', 'veículo: folha "Peças MG para Volkswagen Gol 2010 1.6" com ' + btnV.total + ' peças e colunas código/nome/linha/aplicação');
+  ok(folhaV && folhaV.linhas === btnV.total && btnV.total > 30 && folhaV.cods.join(',') === btnV.cods.join(','), 'veículo: todas as ' + btnV.total + ' peças (não só a 1ª página), na ordem da tela');
+  ok(folhaV && folhaV.l1[2] === 'Mangueiras do Filtro de Ar' && /\d{4}/.test(folhaV.l1[3]) && folhaV.qr && folhaV.link === 'https://mgpecasautomotivas.github.io/#/veiculo/Volkswagen/Gol/2010?motor=1.6' && !PROIBIDO.test(folhaV.texto), 'veículo: linha e aplicação (motor/anos) por peça, QR com o link desta busca, sem valores');
+  await page.click('#conteudo .filtro-linhas .chip >> nth=1'); /* Mangueiras do Filtro de Ar */
+  await page.selectOption('#conteudo .res-barra .select-mini', 'codigo');
+  var telaVF = await page.evaluate(function () { return { total: +document.querySelector('#conteudo .res-cont b').textContent, cods: Array.prototype.map.call(document.querySelectorAll('#conteudo .painel-res .item-cod'), function (e) { return e.textContent; }), folha: !!document.getElementById('impressao') }; });
+  await page.click('#conteudo .res-barra .btn-imprimir');
+  var folhaVF = await lerFolha();
+  ok(folhaVF && folhaVF.titulo === 'Peças MG para Volkswagen Gol 2010 1.6 · Mangueiras do Filtro de Ar' && folhaVF.linhas === telaVF.total && folhaVF.cods.join(',') === telaVF.cods.join(',') && folhaVF.link === 'https://mgpecasautomotivas.github.io/#/veiculo/Volkswagen/Gol/2010?motor=1.6&linha=filtro-ar', 'veículo filtrado por linha e em ordem de código: título com a linha, ' + telaVF.total + ' peças na ordem da tela, link com ?linha=');
+  await page.selectOption('#conteudo .res-barra .select-mini', 'relevancia');
+  /* Ctrl+P (menu Imprimir do navegador): beforeprint monta a folha da tela, afterprint tira */
+  await page.evaluate(function () { window.dispatchEvent(new Event('beforeprint')); });
+  var ctrlP = await page.evaluate(function () { return !!document.getElementById('impressao') && document.body.classList.contains('imprimindo'); });
+  await page.evaluate(function () { window.dispatchEvent(new Event('afterprint')); });
+  ok(ctrlP && await page.evaluate(function () { return !document.getElementById('impressao') && !document.body.classList.contains('imprimindo'); }), 'Ctrl+P: beforeprint monta a folha da tela e afterprint tira');
+  await page.evaluate(function () { localStorage.removeItem('mg-lista'); });
 
   console.log('\nLinhas, Instalar, Sobre');
   await ir(page, '#/linhas', '.grade-linhas .linha-card');
@@ -499,6 +584,9 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await ir(p360, '#/lista', '.lista-item');
   var ladoLista = await p360.evaluate(function () { var li = document.querySelector('#conteudo .lista-item'), a = li.querySelector('.item').getBoundingClientRect(), q = li.querySelector('.lista-qtd').getBoundingClientRect(), x = li.querySelector('.item-remover').getBoundingClientRect(); return [Math.round(a.right), Math.round(q.left), Math.round(q.right), Math.round(x.left), document.documentElement.scrollWidth <= document.documentElement.clientWidth]; });
   ok(ladoLista[1] >= ladoLista[0] && ladoLista[3] >= ladoLista[2] && ladoLista[4], 'paisagem: cartão da lista em uma linha (peça · quantidade · ×) sem rolagem horizontal');
+  await ir(p360, '#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.res-barra .btn-imprimir');
+  var btnV844 = await p360.evaluate(function () { var b = document.querySelector('#conteudo .res-barra .btn-imprimir'); return [getComputedStyle(b.querySelector('.btn-imprimir-txt')).display, Math.round(b.getBoundingClientRect().height), b.textContent.trim()]; });
+  ok(btnV844[0] !== 'none' && btnV844[1] >= 44 && btnV844[2] === 'Imprimir / PDF', 'a partir de 560 px o botão do veículo mostra "Imprimir / PDF" por extenso (' + btnV844.join(' / ') + ')');
   await ir(p360, '#/peca/MG001', 'table.tabela');
   await p360.emulateMedia({ colorScheme: 'dark' }); await capturar(p360, '09-paisagem-ficha-escuro'); await p360.emulateMedia({ colorScheme: 'light' });
   await p360.setViewportSize({ width: 390, height: 844 });

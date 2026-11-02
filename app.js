@@ -76,6 +76,73 @@
   }
   function copiarLink(url) { return copiarTexto(url).then(function () { toast('Link copiado'); }).catch(function () { toast('Não foi possível copiar o link.'); }); }
 
+  /* ---------- imprimir ou salvar em PDF ----------
+     Folha limpa (preto no branco, fontes do sistema) montada só na hora: a tela aberta diz o que vai na folha (folhaProvedor:
+     Minha lista, ficha da peça ou peças do veículo com os filtros da tela), a seção #impressao entra no fim do body e, com a
+     classe body.imprimindo, o CSS @media print esconde todo o resto (topo, abas, toasts, faixa). window.print() vai direto no
+     toque: no celular a caixa de impressão do navegador salva em PDF (no iPhone abre a folha de compartilhar/imprimir do
+     sistema). Ctrl+P no computador monta a mesma folha (beforeprint). Nada sai do aparelho; a folha não traz valores nem
+     contato: código, nome, linha, aplicação, números originais, data e um QR code (qr.js) do link do app ou da ficha. */
+  var folhaProvedor = null, folhaEl = null, tituloAntesFolha = null;
+  function qrImpressao(url) {
+    try { if (window.MG_QR && url && url.length <= window.MG_QR.capacidade(10)) return window.MG_QR.svg(url, { margem: 2, largura: 96, alt: 'QR code: ' + url }); } catch (e) {}
+    return '';
+  }
+  /* o: { titulo, sub, corpo: [nós], url (link do QR e do rodapé) } */
+  function folhaImpressao(o) {
+    var url = o.url || urlApp(), qr = qrImpressao(url);
+    var cab = el('header', { class: 'imp-cab' }, [
+      el('img', { class: 'imp-logo', src: logoSrc(), alt: 'MG Peças Automotivas', width: '708', height: '267' }),
+      el('div', { class: 'imp-cab-txt' }, [el('h1', { text: o.titulo }), el('p', { class: 'imp-data' }, [o.sub ? el('span', { class: 'imp-sub', text: o.sub + ' · ' }) : null, 'Impresso em ' + dataBr(hojeIso())])])
+    ]);
+    var rodape = el('footer', { class: 'imp-rodape' }, [
+      el('div', { class: 'imp-rodape-txt' }, [
+        el('b', { text: 'Catálogo MG Peças Automotivas · ' + urlApp() }),
+        url !== urlApp() ? el('span', { class: 'imp-link', text: url }) : null,
+        qr ? el('span', { text: 'Aponte a câmera do celular para o QR code para abrir no app.' }) : null
+      ]),
+      qr ? el('div', { class: 'imp-qr', html: qr }) : null
+    ]);
+    return el('section', { id: 'impressao', 'aria-hidden': 'true', lang: 'pt-BR' }, [cab].concat(o.corpo || []).concat([rodape]));
+  }
+  function limparFolha() {
+    if (folhaEl) { folhaEl.remove(); folhaEl = null; }
+    document.body.classList.remove('imprimindo');
+    if (tituloAntesFolha != null) { document.title = tituloAntesFolha; tituloAntesFolha = null; }
+  }
+  /* monta a folha da tela aberta (ou nada, quando a tela não tem folha ou está vazia); o título vira o nome do PDF */
+  function montarFolha() {
+    if (!folhaProvedor) return null;
+    var o = null; try { o = folhaProvedor(); } catch (e) { console.error(e); }
+    if (!o) return null;
+    limparFolha();
+    folhaEl = folhaImpressao(o); document.body.appendChild(folhaEl); document.body.classList.add('imprimindo');
+    tituloAntesFolha = document.title; document.title = o.titulo + ' · MG Peças';
+    return folhaEl;
+  }
+  function imprimir() {
+    if (!montarFolha()) { toast('Nada para imprimir nesta tela.'); return; }
+    try { window.print(); } catch (e) { limparFolha(); toast('Não foi possível abrir a impressão neste navegador.'); }
+  }
+  window.addEventListener('beforeprint', function () { if (!folhaEl) montarFolha(); }); /* Ctrl+P / menu Imprimir do navegador */
+  window.addEventListener('afterprint', limparFolha);
+  /* botão "Imprimir / PDF" (44 px, ícone de impressora). curto: só o ícone no celular (o texto entra a partir de 560 px, CSS);
+     qr.js entra junto com o botão (pequeno, já no cache do SW) para o QR estar pronto na hora do toque */
+  function botaoImprimir(classe, curto) {
+    var b = el('button', { type: 'button', class: 'btn btn-neutro btn-imprimir' + (classe ? ' ' + classe : '') + (curto ? ' btn-imprimir-curto' : ''), 'aria-label': curto ? 'Imprimir / PDF' : null, title: 'Imprimir ou salvar em PDF' },
+      [svg(ICONES.impressora), el('span', { class: 'btn-imprimir-txt', text: 'Imprimir / PDF' })]);
+    b.addEventListener('click', imprimir);
+    carregarScript('qr.js').catch(function () {});
+    return b;
+  }
+  /* tabela da folha: cabecalhos [texto…], linhas [[célula…]…] (célula = texto ou { t: texto, c: classe }), larguras ['15%', …] por coluna */
+  function tabelaImpressao(cabecalhos, linhas, larguras) {
+    return el('table', { class: 'imp-tabela' }, [
+      el('thead', {}, [el('tr', {}, cabecalhos.map(function (h, i) { return el('th', { text: h, style: larguras && larguras[i] ? 'width:' + larguras[i] : null }); }))]),
+      el('tbody', {}, linhas.map(function (l) { return el('tr', {}, l.map(function (c) { return typeof c === 'string' ? el('td', { text: c }) : el('td', { text: c.t, class: c.c || null }); })); }))
+    ]);
+  }
+
   /* ---------- favoritos ("Minhas peças"): só os códigos MG, no aparelho ---------- */
   var FAV_MAX = 200;
   function favoritos() { var l = lsJson('mg-favoritos'); return Array.isArray(l) ? l : []; }
@@ -174,6 +241,7 @@
     atualizar: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>',
     lista: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
     listaMais: '<path d="M4 6h12M4 12h12M4 18h7"/><path d="M18 14v6M15 17h6"/>',
+    impressora: '<path d="M7 8V3h10v5"/><path d="M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M7 13h10v8H7z"/>',
     mais: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8.5v7M8.5 12h7"/>',
     conversa: '<path d="M12 4a8 8 0 0 0-6.9 12L4 20l4.2-1.1A8 8 0 1 0 12 4z"/>'
   };
@@ -723,18 +791,23 @@
     });
   }
   /* item(it) devolve o <li> de cada peça; a ordem dentro de cada linha é a ordem recebida */
-  function listaAgrupada(itens, item) {
-    var frag = document.createDocumentFragment(), grupos = {}, ordem = [];
+  /* grupos por linha, na ordem de LINHAS: [{ id, itens }] (a lista agrupada da tela e a folha impressa usam a mesma ordem) */
+  function gruposPorLinha(itens) {
+    var grupos = {}, ordem = [];
     itens.forEach(function (it) {
       var l = linhaDe(it.p[0]).id;
       if (!grupos[l]) { grupos[l] = []; ordem.push(l); }
       grupos[l].push(it);
     });
     ordem.sort(function (a, b) { return LINHAS.findIndex(function (l) { return l.id === a; }) - LINHAS.findIndex(function (l) { return l.id === b; }); });
-    ordem.forEach(function (l) {
-      frag.appendChild(el('div', { class: 'grupo-cab' }, [el('h3', { text: LINHA_POR_ID[l].nome }), el('small', { text: plural(grupos[l].length, 'peça', 'peças') })]));
+    return ordem.map(function (l) { return { id: l, itens: grupos[l] }; });
+  }
+  function listaAgrupada(itens, item) {
+    var frag = document.createDocumentFragment();
+    gruposPorLinha(itens).forEach(function (g) {
+      frag.appendChild(el('div', { class: 'grupo-cab' }, [el('h3', { text: LINHA_POR_ID[g.id].nome }), el('small', { text: plural(g.itens.length, 'peça', 'peças') })]));
       var ul = el('ul', { class: 'lista' });
-      grupos[l].forEach(function (it) { ul.appendChild(item(it)); });
+      g.itens.forEach(function (it) { ul.appendChild(item(it)); });
       frag.appendChild(ul);
     });
     return frag;
@@ -763,10 +836,13 @@
     wrap.conferir = conferir;
     return wrap;
   }
-  function painelResultados(itens, item, agrupar, filtroInicial, paginasIniciais) {
+  function painelResultados(itens, item, agrupar, filtroInicial, paginasIniciais, opcoes) {
     /* paginasIniciais: páginas do "Mostrar mais" que já estavam abertas (a busca por texto refaz a lista quando detalhes.json
-       chega e reabre as mesmas); vale só na 1ª montagem — trocar o filtro ou a ordem volta à 1ª página */
-    var porLinha = {}, POR = 30, filtro = '', abrir = Math.max(1, +paginasIniciais || 1);
+       chega e reabre as mesmas); vale só na 1ª montagem — trocar o filtro ou a ordem volta à 1ª página.
+       opcoes.acao: botão extra ao lado da ordem (tela do veículo: Imprimir / PDF). wrap.visiveis() devolve as peças na ordem
+       da tela (filtro e ordem aplicados; agrupadas por linha quando a tela agrupa), todas, não só a página aberta; wrap.filtro() a linha filtrada */
+    var porLinha = {}, POR = 30, filtro = '', abrir = Math.max(1, +paginasIniciais || 1), ordemTela = itens;
+    opcoes = opcoes || {};
     itens.forEach(function (it) { var id = linhaDe(it.p[0]).id; porLinha[id] = (porLinha[id] || 0) + 1; });
     if (filtroInicial && porLinha[filtroInicial]) filtro = filtroInicial; /* já abre filtrado; "Todas" é o 1º chip */
     var linhas = LINHAS.filter(function (l) { return porLinha[l.id]; });
@@ -784,7 +860,9 @@
     sel.value = ordemAtual;
     sel.addEventListener('change', function () { ordemAtual = sel.value; montar(); });
     var corpo = el('div');
-    var wrap = el('div', { class: 'painel-res' }, [chips && rolavel(chips), el('div', { class: 'res-barra' }, [cont, el('div', { class: 'select-wrap select-mini-wrap' }, [sel])]), corpo]);
+    var wrap = el('div', { class: 'painel-res' }, [chips && rolavel(chips), el('div', { class: 'res-barra' }, [cont, el('div', { class: 'res-ferramentas' }, [el('div', { class: 'select-wrap select-mini-wrap' }, [sel]), opcoes.acao || null])]), corpo]);
+    wrap.visiveis = function () { return ordemTela.slice(); };
+    wrap.filtro = function () { return filtro; };
     function montar() {
       wrap.setAttribute('data-filtro', filtro); /* a busca por texto lê o filtro (e data-paginas) ao refazer a lista quando detalhes.json chega */
       Object.keys(botoes).forEach(function (id) { var on = id === filtro; botoes[id].classList.toggle('ativo', on); botoes[id].setAttribute('aria-pressed', on ? 'true' : 'false'); });
@@ -795,7 +873,8 @@
       if (filtro && chips) { var tudo = el('button', { type: 'button', class: 'link-acao res-todas', text: 'Todas' }); tudo.addEventListener('click', function () { filtro = ''; montar(); chips.scrollLeft = 0; }); cont.appendChild(document.createTextNode(' · ')); cont.appendChild(tudo); }
       anunciar(plural(vis.length, 'peça encontrada', 'peças encontradas') + (filtro ? ' em ' + LINHA_POR_ID[filtro].nome : ''));
       corpo.innerHTML = '';
-      if (agrupar && !filtro) { corpo.appendChild(listaAgrupada(vis, item)); return; }
+      ordemTela = vis;
+      if (agrupar && !filtro) { ordemTela = [].concat.apply([], gruposPorLinha(vis).map(function (g) { return g.itens; })); corpo.appendChild(listaAgrupada(vis, item)); return; }
       var ul = el('ul', { class: 'lista' }), pagina = 0;
       var mais = el('div', { class: 'mais' }, [el('button', { type: 'button', class: 'btn btn-neutro', text: 'Mostrar mais' })]);
       function maisItens() { vis.slice(pagina * POR, (pagina + 1) * POR).forEach(function (it) { ul.appendChild(item(it)); }); pagina++; mais.hidden = pagina * POR >= vis.length; wrap.setAttribute('data-paginas', String(pagina)); }
@@ -1422,6 +1501,7 @@
      por isso quem chama passa um <div> com os blocos (um cartão sozinho vai dentro de um div) */
   var primeiraTela = true;
   function mostrar(node) {
+    limparFolha(); folhaProvedor = null; /* a folha de impressão é da tela que sai; a tela nova registra a sua (se tiver) */
     tela.innerHTML = ''; node.classList.add('entrada-tela'); tela.appendChild(node); restaurarRolagem();
     /* ao trocar de tela, o foco vai para o conteúdo (leitor de tela e teclado começam do início da tela nova);
        na 1ª abertura fica onde está. As telas Placa e Busca levam o foco para o campo logo depois. */
@@ -1705,9 +1785,25 @@
       var btnComp = el('button', { type: 'button', class: 'link-acao' }, [svg(ICONES.compartilhar), 'Compartilhar esta busca']);
       btnComp.addEventListener('click', function () { compartilhar('Peças MG para ' + titulo, 'Peças MG para ' + titulo + (motor ? ' ' + motor : ''), urlApp(hashBusca)); });
       cab.appendChild(el('div', { class: 'res-acoes' }, [btnComp]));
-      res.appendChild(painelResultados(itens, function (it) {
+      var painel = painelResultados(itens, function (it) {
         return itemPeca(it.i, '<b>' + esc(marca + ' ' + modelo) + '</b> ' + (it.a[3] ? esc(it.a[3]) + ' · ' : '') + esc(anoTexto(it.a)), it.mc === 1 && (cil || motor) ? 'Confirme o motor' : null, null, { lista: true });
-      }, true, linha));
+      }, true, linha, undefined, { acao: botaoImprimir('btn-mini', true) });
+      res.appendChild(painel);
+      /* folha "Peças MG para <veículo> · <linha>": código, nome, linha e aplicação (motor/anos) de todas as peças na ordem da tela
+         (filtro de linha e ordem aplicados); o QR leva a esta busca no app */
+      folhaProvedor = function () {
+        var vis = painel.visiveis(), f = painel.filtro();
+        if (!vis.length) return null;
+        var hashFolha = hashVeiculo({ marca: marca, modelo: modelo, ano: ano, motor: motor, linha: f }) + (cil ? '&cil=' + cil.toFixed(1) : '');
+        return {
+          titulo: 'Peças MG para ' + titulo + (motor ? ' ' + motor : '') + (f ? ' · ' + LINHA_POR_ID[f].nome : ''),
+          sub: plural(vis.length, 'peça', 'peças') + (motor ? '' : ' · todos os motores'),
+          corpo: [tabelaImpressao(['Código', 'Nome', 'Linha', 'Aplicação'], vis.map(function (it) {
+            return [{ t: it.p[0], c: 'imp-cod-col' }, it.p[1], linhaDe(it.p[0]).nome, (it.a[3] ? it.a[3] + ' · ' : '') + anoTexto(it.a) + (it.mc === 1 && (cil || motor) ? ' (confirme o motor)' : '')];
+          }), ['14%', '36%', '25%', '25%']), el('p', { class: 'imp-nota', text: 'Confira sempre o motor e o ano do veículo antes de instalar.' })],
+          url: urlApp(hashFolha)
+        };
+      };
     }).catch(function (e) { res.innerHTML = ''; res.appendChild(status('Não foi possível carregar as peças deste veículo. Verifique a conexão.', 'erro')); console.error(e); });
   }
   /* chips de ano e de motor nos resultados por veículo; cada chip é um link da mesma busca com o filtro trocado.
@@ -1896,7 +1992,7 @@
       function pintarLista() { var it = naLista(p[0]), b = btnLista.lastChild; b.hidden = !it; b.textContent = it ? String(it.qtd) : ''; btnLista.setAttribute('aria-label', 'Adicionar à lista' + (it ? ' (' + plural(it.qtd, 'unidade', 'unidades') + ' na lista)' : '')); }
       btnLista.addEventListener('click', function () { adicionarComToast(p[0]); pintarLista(); });
       pintarLista();
-      var acoesPeca = el('div', { class: 'linha-btn acoes-peca' }, [btnFav, btnComp, btnLista]);
+      var acoesPeca = el('div', { class: 'linha-btn acoes-peca' }, [btnFav, btnComp, btnLista, botaoImprimir('btn-acao')]);
       var cab = el('section', {}, [el('div', { class: 'detalhe-cod', text: p[0] }), el('div', { class: 'detalhe-nome', text: p[1] }), meta, d.e ? el('p', { class: 'ajuda', text: 'Embalagem: ' + d.e }) : null, acoesPeca]);
       var apl;
       if (d.a && d.a.length) {
@@ -1927,6 +2023,23 @@
       /* .detalhe-topo: foto e cabeçalho (código, nome, linha, ações) — em pé um abaixo do outro; no celular deitado lado a lado */
       mostrar(el('div', {}, [el('div', { class: 'detalhe-topo' }, [foto, cab]), apl, oem, acoes, relacionados]));
       montarRelacionados(relacionados, i, d);
+      /* folha "Ficha da peça <código>": foto (se já carregou), código, nome, linha, aplicação completa e números originais; QR da prévia p/<código>.html */
+      folhaProvedor = function () {
+        var im = foto.querySelector('.foto.ok img'), src = im ? (im.currentSrc || im.src) : '';
+        var corpo = [el('div', { class: 'imp-peca' }, [
+          src ? el('img', { class: 'imp-foto', src: src, alt: '', width: '640', height: '352' }) : null,
+          el('div', { class: 'imp-peca-txt' }, [
+            el('div', { class: 'imp-cod', text: p[0] }), el('div', { class: 'imp-nome', text: p[1] }),
+            el('div', { class: 'imp-linha', text: 'Linha: ' + l.nome + (d.m && d.m.length ? ' · ' + d.m.join(', ') : '') }),
+            d.e ? el('div', { class: 'imp-linha', text: 'Embalagem: ' + d.e }) : null
+          ])
+        ])];
+        corpo.push(el('h2', { text: 'Aplicação' }));
+        if (d.a && d.a.length) corpo.push(tabelaImpressao(['Veículo', 'Motor', 'Anos'], d.a.map(function (a) { return [a[0], a[1] || '—', a[2] || '—']; }), ['44%', '30%', '26%']), el('p', { class: 'imp-nota', text: 'Confira sempre o motor e o ano do veículo antes de instalar.' }));
+        else corpo.push(el('p', { class: 'imp-nota', text: 'Aplicação em revisão. Consulte a página da peça no site.' }));
+        if (d.o && d.o.length) corpo.push(el('h2', { text: 'Números originais' }), el('p', { class: 'imp-oem', text: d.o.join('   ') }), el('p', { class: 'imp-nota', text: 'Números de referência da montadora que esta peça MG substitui.' }));
+        return { titulo: 'Ficha da peça ' + p[0], sub: p[1], corpo: corpo, url: urlApp('p/' + encodeURIComponent(p[0]) + '.html') };
+      };
     }).catch(function (e) { mostrar(el('div', {}, [status('Não foi possível abrir a peça. Verifique a conexão.', 'erro')])); console.error(e); });
   }
   /* no computador, arrastar o mouse a partir de um número original não deve selecionar o resto da página: o CSS
@@ -2088,7 +2201,18 @@
       }
       l.forEach(function (x) { ul.appendChild(itemLista(x, atualizar, remover)); });
       res.appendChild(el('div', { class: 'res-cab' }, [el('h2', { class: 'visualmente-oculto', text: 'Peças da lista' }), cont]));
-      res.appendChild(el('div', { class: 'cartao lista-acoes' }, [el('div', { class: 'linha-btn' }, [btnZap, btnCopiar, btnComp]), el('p', { class: 'ajuda', text: 'O texto traz só o código MG, o nome e a quantidade, sem valores. A lista fica guardada só neste aparelho.' })]));
+      res.appendChild(el('div', { class: 'cartao lista-acoes' }, [el('div', { class: 'linha-btn' }, [btnZap, btnCopiar, btnComp, botaoImprimir()]), el('p', { class: 'ajuda', text: 'O texto traz só o código MG, o nome e a quantidade, sem valores. A lista fica guardada só neste aparelho. Imprimir / PDF gera uma folha com a lista.' })]));
+      /* folha "Lista de peças MG": quantidade, código, nome e linha de cada peça; QR do app */
+      folhaProvedor = function () {
+        var lv = listaValida();
+        if (!lv.length) return null;
+        return {
+          titulo: 'Lista de peças MG', sub: resumoLista(totaisLista(lv)),
+          corpo: [tabelaImpressao(['Qtd', 'Código', 'Nome', 'Linha'], lv.map(function (x) { var pp = produtos[porCodigo[x.codigo]]; return [{ t: String(x.qtd), c: 'imp-num' }, { t: pp[0], c: 'imp-cod-col' }, pp[1], linhaDe(pp[0]).nome]; }), ['8%', '16%', '44%', '32%']),
+            el('p', { class: 'imp-nota', text: 'Lista montada no app da MG, sem valores. Confira o código e a quantidade antes de usar.' })],
+          url: urlApp()
+        };
+      };
       res.appendChild(ul);
       res.appendChild(el('details', { class: 'cartao lista-texto' }, [el('summary', { text: 'Ver o texto da lista' }), pre]));
       res.appendChild(el('div', { class: 'lista-rodape' }, [limpar, confirmar]));

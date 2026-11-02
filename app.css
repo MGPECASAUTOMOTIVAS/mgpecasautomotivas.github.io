@@ -401,8 +401,11 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .link-outro-veic { margin: 2px 0 -8px; }
 /* ficha da peça: salvar em Minhas peças, compartilhar e adicionar à lista (botões menores, toque de 44px);
    com 150px de base cabem dois por linha no celular (o 3º desce inteiro) e três no computador */
-.acoes-peca { margin-top: 14px; }
-.btn-acao { min-height: 44px; padding: 0 12px; font-size: .9375rem; letter-spacing: .04em; width: auto; flex: 1 1 150px; gap: 8px; }
+/* 4 ações (Salvar peça, Compartilhar, Adicionar à lista, Imprimir / PDF): grade de 2 por linha no celular (colunas de 150 px ou mais,
+   4 na tela larga); um rótulo que não cabe quebra em 2 linhas dentro do botão em vez de empurrar o botão para a linha de baixo */
+.acoes-peca { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.acoes-peca .btn { white-space: normal; padding-top: 5px; padding-bottom: 5px; line-height: 1.1; }
+.btn-acao { min-height: 44px; padding: 0 8px; font-size: .9375rem; letter-spacing: .02em; width: auto; flex: 1 1 150px; gap: 5px; } /* "Adicionar à lista" com o contador cabe em meia coluna de 390 px */
 .btn-acao svg { width: 18px; height: 18px; }
 .btn-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--btn-fundo); color: #fff; font: 700 .75rem/20px var(--cond); letter-spacing: 0; }
 .btn-favorito[aria-pressed="true"] { background: var(--mg-claro); border-color: var(--mg); color: var(--mg-texto-claro); }
@@ -612,6 +615,12 @@ body:not(.rota-inicio):not(.rota-instalar):has(.faixa-instalar:not([hidden])) .t
 .select-mini-wrap { flex: 0 0 auto; }
 .select-mini { width: auto; height: 44px; font-size: .875rem; padding: 0 34px 0 12px; }
 .select-mini-wrap::after { right: 13px; }
+/* ordem + "Imprimir / PDF" lado a lado (tela do veículo); no celular o botão fica só com o ícone (44 px), o texto entra a partir de 560 px */
+.res-ferramentas { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.res-cont { min-width: 0; }
+.btn-imprimir-curto { min-width: 44px; padding: 0 11px; gap: 8px; }
+.btn-imprimir-curto .btn-imprimir-txt { display: none; }
+@media (min-width: 560px) { .btn-imprimir-curto .btn-imprimir-txt { display: inline; } }
 .painel-res .grupo-cab:first-child { margin-top: 4px; }
 /* Minhas peças: ordem + "Limpar todas" com confirmação em linha */
 .minhas-barra { margin-top: 0; }
@@ -693,4 +702,50 @@ body:not(.rota-inicio):not(.rota-instalar):has(.faixa-instalar:not([hidden])) .t
   .detalhe-topo > * + * { margin-top: 0; }
   .zoom-palco { padding: 12px 72px calc(var(--sa-fundo) + 36px); }
   .zoom-dica { bottom: calc(var(--sa-fundo) + 10px); }
+}
+
+/* ---------- imprimir ou salvar em PDF ----------
+   A folha (#impressao) existe só durante a impressão (app.js: montarFolha/limparFolha, body.imprimindo). Preto no branco,
+   fontes do sistema, sem fundo colorido, igual nos dois temas; thead repetido a cada página e linhas sem cortar. A4 e Carta. */
+#impressao { display: none; }
+@media print {
+  @page { margin: 12mm 12mm 14mm; }
+  /* color-scheme light também no tema escuro: sem ele o Chromium pinta a margem da página de preto */
+  html, body { background: #fff !important; color: #000 !important; color-scheme: light !important; }
+  body { padding: 0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* mesmo sem a folha (Ctrl+P numa tela sem folha): sai só o conteúdo, sem abas, topo fixo, toasts nem faixas */
+  .abas, .toast, .faixa-instalar, .aviso-atualizar, .folha-fundo, .aviso-offline, .pular, .btn-imprimir, .zoom { display: none !important; }
+  .topo { position: static; }
+  body.imprimindo > :not(#impressao) { display: none !important; }
+  body.imprimindo #impressao {
+    display: block; color: #000; background: #fff; color-scheme: light;
+    font: 11pt/1.35 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  #impressao h1, #impressao h2 { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #000; }
+  #impressao a { color: #000; text-decoration: none; }
+  .imp-cab { display: flex; align-items: center; gap: 8mm; padding-bottom: 4mm; border-bottom: .6pt solid #000; margin-bottom: 5mm; }
+  .imp-logo { width: 40mm; height: auto; flex: 0 0 auto; }
+  .imp-cab-txt { min-width: 0; }
+  .imp-cab h1 { font-size: 16pt; font-weight: 700; line-height: 1.15; text-transform: none; letter-spacing: 0; margin: 0; }
+  .imp-data { margin: 1.5mm 0 0; font-size: 9.5pt; }
+  #impressao h2 { font-size: 11.5pt; font-weight: 700; line-height: 1.2; text-transform: uppercase; letter-spacing: .04em; margin: 6mm 0 2mm; break-after: avoid; page-break-after: avoid; }
+  .imp-tabela { width: 100%; border-collapse: collapse; font-size: 10pt; }
+  .imp-tabela thead { display: table-header-group; }
+  .imp-tabela tr { break-inside: avoid; page-break-inside: avoid; }
+  .imp-tabela th { text-align: left; font-weight: 700; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .05em; padding: 1.2mm 3mm 1.2mm 0; border-bottom: .8pt solid #000; }
+  .imp-tabela td { padding: 1.5mm 3mm 1.5mm 0; border-bottom: .3pt solid #000; vertical-align: top; }
+  .imp-tabela td.imp-num { text-align: right; white-space: nowrap; font-weight: 700; }
+  .imp-tabela td.imp-cod-col { font-weight: 700; white-space: nowrap; }
+  .imp-peca { display: flex; align-items: flex-start; gap: 6mm; break-inside: avoid; page-break-inside: avoid; }
+  .imp-foto { width: 60mm; height: 33mm; object-fit: contain; border: .3pt solid #000; flex: 0 0 auto; background: #fff; }
+  .imp-peca-txt { min-width: 0; }
+  .imp-cod { font-size: 20pt; font-weight: 800; line-height: 1; letter-spacing: .02em; }
+  .imp-nome { font-size: 13pt; font-weight: 600; line-height: 1.2; margin-top: 1.5mm; }
+  .imp-linha { font-size: 10pt; margin-top: 1.5mm; }
+  .imp-oem { margin: 0; font: 600 11pt/1.7 ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .imp-nota { font-size: 9pt; margin: 2mm 0 0; }
+  .imp-rodape { display: flex; align-items: flex-end; justify-content: space-between; gap: 6mm; margin-top: 8mm; padding-top: 3mm; border-top: .6pt solid #000; font-size: 9pt; break-inside: avoid; page-break-inside: avoid; }
+  .imp-rodape-txt { display: flex; flex-direction: column; gap: 1mm; min-width: 0; overflow-wrap: anywhere; }
+  .imp-qr { flex: 0 0 auto; }
+  .imp-qr svg { display: block; width: 24mm; height: 24mm; }
 }
