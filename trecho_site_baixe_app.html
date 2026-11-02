@@ -1,0 +1,26 @@
+<!-- Faixa "Baixe o app da MG" para o site (Nuvemshop, tema Ipanema).
+     Onde colar: seção "HTML personalizado" da home ou no rodapé (Loja online > Editar tema > Código do rodapé).
+     Trocar URL_DO_APP pelo endereço final do app (ex.: https://app.mgpecasautomotivas.com.br/ ou
+     https://mgpecasautomotivas.github.io/). NÃO publicar antes do "pode publicar". -->
+<style>
+.mgapp{--az:#0b4ea2;--az2:#083d80;font-family:"Barlow",system-ui,Arial,sans-serif;max-width:1100px;margin:24px auto;padding:0 16px;box-sizing:border-box}
+.mgapp a.mgapp-caixa{display:flex;align-items:center;gap:18px;background:linear-gradient(135deg,var(--az) 0%,var(--az2) 100%);color:#fff;text-decoration:none;border-radius:16px;padding:18px 22px;box-shadow:0 10px 28px rgba(11,78,162,.28);transition:transform .15s,box-shadow .15s}
+.mgapp a.mgapp-caixa:hover{transform:translateY(-2px);box-shadow:0 14px 34px rgba(11,78,162,.36)}
+.mgapp-ic{flex:0 0 auto;width:64px;height:64px;border-radius:16px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.mgapp-ic img{width:52px;height:52px;border-radius:12px;display:block}
+.mgapp-tx{flex:1;min-width:0}
+.mgapp-tx b{display:block;font:800 24px/1.05 "Barlow Condensed","Barlow",sans-serif;text-transform:uppercase;letter-spacing:.02em}
+.mgapp-tx span{display:block;font-size:15px;color:rgba(255,255,255,.88);margin-top:4px}
+.mgapp-btn{flex:0 0 auto;background:#f5b400;color:#1b1b1b;font:700 15px/1 "Barlow Condensed","Barlow",sans-serif;text-transform:uppercase;letter-spacing:.06em;padding:14px 20px;border-radius:10px;white-space:nowrap}
+@media (max-width:640px){.mgapp a.mgapp-caixa{flex-wrap:wrap;padding:16px}.mgapp-tx b{font-size:20px}.mgapp-btn{width:100%;text-align:center}}
+</style>
+<div class="mgapp">
+  <a class="mgapp-caixa" href="URL_DO_APP" rel="noopener">
+    <span class="mgapp-ic"><img src="URL_DO_APP/icones/icone-192.png" alt="" width="52" height="52" loading="lazy"></span>
+    <span class="mgapp-tx">
+      <b>Baixe o app da MG</b>
+      <span>Catálogo no celular: busca pela placa, pelo veículo ou pelo código MG. Grátis, para iPhone e Android, funciona até sem internet.</span>
+    </span>
+    <span class="mgapp-btn">Abrir e instalar</span>
+  </a>
+</div>

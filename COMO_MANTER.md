@@ -1,0 +1,106 @@
+# Como manter o app do catálogo MG
+
+Guia curto para o Filipe. Tudo o que está aqui foi testado em 02/11/2026.
+
+> **Mudança de endereço (02/11/2026):** o app saiu de `filipefrancas.github.io/mg-site-arquivos/app/` e passou a ser
+> publicado na raiz de **https://mgpecasautomotivas.github.io/** (repositório `MGPECASAUTOMOTIVAS/mgpecasautomotivas.github.io`).
+> O endereço antigo continua no ar só como redirecionamento para o novo (inclusive os links de peça `p/MG001.html`).
+
+## 1. O que é e onde está
+- É o catálogo da MG em forma de aplicativo: abre no navegador do celular e pode ser instalado na tela inicial
+  (iPhone e Android). Mostra as peças, as aplicações e os números originais. Funciona sem internet depois da
+  primeira abertura.
+- Endereço no ar: https://mgpecasautomotivas.github.io/
+- Os arquivos ficam em dois lugares:
+  - **Repositório** `MGPECASAUTOMOTIVAS/mgpecasautomotivas.github.io` no GitHub (organização da MG) → a raiz dele é o que
+    está publicado. O repositório antigo `filipefrancas/mg-site-arquivos` guarda em `app/` só o redirecionamento para cá.
+  - **Pasta do projeto** `site-nuvemshop/app_catalogo/` → cópia de trabalho, com os scripts que geram os dados.
+- Na raiz do repositório, o que importa:
+  - `dados/indice.json`, `produtos.json`, `imagens.json`, `marcas/` → lista de peças, fotos e tabela de veículos.
+  - `dados/detalhes.json` → aplicações, números originais e linha de cada peça.
+  - `p/` → uma página por peça (`p/MG001.html`) para o link compartilhado mostrar nome e foto nos aplicativos de mensagem.
+  - `config.js` → versão do app e endereços.
+  - `sw.js` → o "guardador" que faz o app funcionar sem internet; tem a mesma versão.
+  - `teste/fumaca.js` → teste automático (abaixo).
+  - `LEIA-ME.md` → explicação técnica completa; `COMO_MANTER.md` → este guia.
+
+## 2. Peça nova ou aplicação alterada: como chega ao app
+Os dados do app nunca são digitados à mão: eles saem dos mesmos arquivos do site. O caminho é sempre o mesmo:
+
+1. **Atualize a origem.** A ficha da peça (tipo, aplicações, números originais) fica em
+   `site-nuvemshop/lote_seo/saida/*.json` ou `site-nuvemshop/etapa7_novos/saida/*.json`, e a seção do catálogo
+   impresso em `mg_catalogo_export_2026-10-15.csv`. Peça nova, aplicação nova ou número original novo entram ali
+   (quem faz isso hoje é o agente, a pedido seu; nada é inventado, só o que a fábrica confirmou).
+2. **Tabela de veículos e fotos** (`indice.json`, `produtos.json`, `imagens.json`, `marcas/`): são os arquivos do
+   buscador do site, gerados por `site-nuvemshop/buscador_veiculo/gerar_base.py`. Esse script ainda grava numa pasta
+   temporária do agente; peça ao agente para rodar e copiar o resultado para `buscador_veiculo/busca-veiculo/` e
+   depois para `app_catalogo/dados/` (`imagens.json` e `marcas/` vão direto; `indice.json` e `produtos.json` não:
+   são refeitos no passo 3).
+3. **Gere os dados do app.** Na pasta `site-nuvemshop/app_catalogo/`:
+   ```
+   python3 -I gerar_detalhes.py
+   ```
+   Leva uns 4 segundos e regrava `dados/indice.json`, `dados/produtos.json`, `dados/detalhes.json` e, no fim,
+   chama sozinho o `gerar_previas.py`, que refaz as 2.262 páginas da pasta `p/`. No fim ele imprime quantas peças
+   ficaram sem aplicação e os números originais que descartou, para revisão. Nunca publique `dados/` sem a `p/`
+   da mesma rodada.
+4. **Copie para o repositório** (da pasta `app_catalogo/` para a raiz de `mgpecasautomotivas.github.io/`): `dados/`, `p/` e, se
+   mudou, `app.js`, `app.css`, `config.js`, `sw.js`. Nada de copiar `teste/capturas` ou `previa/`.
+5. Suba a versão (item 4), rode o teste (item 5) e publique (item 3).
+
+## 3. Como publicar
+O GitHub publica sozinho tudo o que entra no ramo principal (`main`). Na pasta `mgpecasautomotivas.github.io`:
+```
+git status                      # mostra o que mudou
+git add -A
+git commit -m "Peça MG1234 com aplicação Gol 2015"   # frase curta dizendo o que mudou
+git push origin main
+```
+- Para conferir que foi: no GitHub, aba **Actions**, o fluxo "Publicar app no GitHub Pages" fica verde em 1 a 2
+  minutos. Depois abra https://mgpecasautomotivas.github.io/config.js e veja se a `versao` é a nova,
+  ou abra o app, toque em **Sobre** e veja a versão.
+- Quem já tem o app instalado recebe a barra "Atualização disponível · Atualizar" na próxima vez que abrir
+  (ou quando voltar para o app). Tocando em Atualizar, ele recarrega uma vez e confirma "App atualizado · versão …".
+  Quem não tocar recebe a versão nova na abertura seguinte. Favoritos, recentes e tema não se perdem.
+
+## 4. Como mudar a versão
+A versão tem que mudar a cada publicação, senão o celular continua com os arquivos antigos. São dois lugares, com
+o mesmo texto (formato ano.mês.dia-número):
+- `config.js` → linha `versao: '2026.11.02-25'`
+- `sw.js` → linha `var VERSAO = '2026.11.02-25';`
+Se os dois ficarem diferentes, o teste do item 5 acusa.
+
+## 5. Como rodar o teste
+Precisa do Node.js e do Playwright com o Chromium (uma vez só: `npm install -g playwright` e
+`npx playwright install chromium`). Na pasta `mgpecasautomotivas.github.io`:
+```
+node teste/fumaca.js
+```
+Em uns 10 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, compartilhar, instalar, versão,
+uso sem internet) e termina com `110/110 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
+Para guardar capturas de tela: `node teste/fumaca.js --capturas pasta_das_capturas`.
+
+## 6. Onde estão as regras
+- `site-nuvemshop/app_catalogo/MELHORIAS.md` → regras do app (o que nunca pode aparecer nele: valores, linguagem
+  de venda, contatos da MG, nomes de distribuidores ou clientes, dado inventado; logo original; português correto),
+  o histórico de tudo o que foi feito e as ideias que esperam a sua decisão.
+- `site-nuvemshop/regras_filipe.md` → suas regras para o site, que valem também para o app.
+- `LEIA-ME.md` → detalhes técnicos (arquivos, dados, publicação, Worker da placa, lojas de aplicativos).
+
+## 7. O que depende do notebook e o que depende de você
+Precisa do notebook (o agente não alcança):
+- **Busca pela placa.** O serviço `mg-placa` no Cloudflare só responde ao site. Para o app funcionar no endereço novo,
+  acrescentar `https://mgpecasautomotivas.github.io` na variável `ORIGENS` do `wrangler.toml` (pasta
+  `Downloads\mg-buscador\worker-placa\deploy`, ver `buscador_veiculo/worker-placa/PASSO_A_PASSO.md`) e rodar
+  `npx wrangler deploy`. Enquanto isso não for feito, a busca pela placa no app mostra a mensagem "ainda está sendo
+  liberada" (o endereço antigo nunca foi liberado, então nada deixou de funcionar). O app já está pronto: nada muda no
+  código quando a origem for liberada.
+- **Painel da Nuvemshop** (fotos e fichas do site) e a conferência do filtro de marca do Mercado Livre
+  (`mlMarcaId` em `config.js`, ver LEIA-ME.md).
+
+Só com a sua autorização:
+- Colocar a faixa "Baixe o app" no site (`trecho_site_baixe_app.html`).
+- Endereço próprio `app.mgpecasautomotivas.com.br` (registro no DNS; ver LEIA-ME.md).
+- Qualquer mudança de cadastro (peça, aplicação, número original, nome de modelo): a lista do que espera decisão
+  está em "Ideias para depois" e "Ideias grandes" no MELHORIAS.md.
+- Publicar nas lojas de aplicativos (Google Play / App Store).

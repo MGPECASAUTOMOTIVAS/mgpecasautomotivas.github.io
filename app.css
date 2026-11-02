@@ -1,0 +1,648 @@
+/* MG Peças Automotivas — app de catálogo (PWA)
+   Identidade: azul MG #0b4ea2, Barlow / Barlow Condensed. Temas claro e escuro. */
+:root {
+  --mg: #0b4ea2;
+  --mg-forte: #083d80;
+  --mg-claro: #e3ecf8;
+  --mg-texto-sobre: #ffffff;
+  --fundo: #f2f5f9;
+  --superficie: #ffffff;
+  --superficie-2: #f7f9fc;
+  --texto: #0f1b2d;
+  --texto-2: #566172;
+  --texto-3: #5f6a7a; /* 5.0:1 sobre --fundo, 5.5:1 sobre branco (AA para texto pequeno) */
+  --btn-fundo: #0b4ea2; --btn-fundo-hover: #083d80; --mg-texto-claro: #0b4ea2;
+  --esq-a: #e9eef5; --esq-b: #f6f8fb; --topo-faixa: #0b4ea2; --logo-chip: transparent;
+  --borda: #dde4ee;
+  --borda-forte: #c3cdd9;
+  --ok: #157a3c; --ok-fundo: #e6f5ec;
+  --aviso: #8a5a00; --aviso-fundo: #fff5dc;
+  --erro: #a3232a; --erro-fundo: #fdecec;
+  --sombra: 0 1px 2px rgba(15,27,45,.06), 0 6px 18px rgba(15,27,45,.06);
+  --sombra-alta: 0 10px 30px rgba(15,27,45,.18);
+  --placa-fundo: #ffffff; --placa-texto: #1b1b1b; --placa-faixa: #0b3b8c; --placa-dica: #6b7280; /* 4,8:1 sobre a placa branca */
+  --foco: #0b4ea2; --foco-inverso: #f5b400; /* anel de foco do teclado: azul MG no tema claro (7:1 sobre o fundo); amarelo sobre fundos escuros e azuis */
+  --raio: 16px; --raio-p: 10px;
+  --abas-altura: 60px;
+  --cond: "Barlow Condensed", "Arial Narrow", "Barlow", system-ui, sans-serif;
+  --fonte: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --sa-topo: env(safe-area-inset-top, 0px);
+  --sa-fundo: env(safe-area-inset-bottom, 0px);
+  --sa-esq: env(safe-area-inset-left, 0px);
+  --sa-dir: env(safe-area-inset-right, 0px);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --mg: #4f93ee; --mg-forte: #2a6cc4; --mg-claro: #15294a; --mg-texto-sobre: #ffffff; /* --mg 5,5:1 sobre a superfície escura */
+    --btn-fundo: #2a6cc4; --btn-fundo-hover: #1f5aa8; --mg-texto-claro: #8db8ff;
+    --esq-a: #1a2436; --esq-b: #243044; --topo-faixa: #141c2b; --logo-chip: #ffffff;
+    --fundo: #0b1220; --superficie: #141c2b; --superficie-2: #1a2436;
+    --texto: #e8eef8; --texto-2: #a3aec0; --texto-3: #8a96a8; /* 5,2:1 sobre --superficie-2 */
+    --borda: #243044; --borda-forte: #34425a;
+    --ok: #5fd08a; --ok-fundo: #10301d; --aviso: #ffd37a; --aviso-fundo: #3a2a05; --erro: #ff8a8f; --erro-fundo: #3d1316;
+    --sombra: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35); --sombra-alta: 0 10px 30px rgba(0,0,0,.6);
+    --placa-fundo: #f4f6f8; --placa-texto: #1b1b1b; --placa-dica: #656c78;
+    --foco: #f5b400; --foco-inverso: #0b4ea2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --mg: #4f93ee; --mg-forte: #2a6cc4; --mg-claro: #15294a; --mg-texto-sobre: #ffffff;
+  --btn-fundo: #2a6cc4; --btn-fundo-hover: #1f5aa8; --mg-texto-claro: #8db8ff;
+  --esq-a: #1a2436; --esq-b: #243044; --topo-faixa: #141c2b; --logo-chip: #ffffff;
+  --fundo: #0b1220; --superficie: #141c2b; --superficie-2: #1a2436;
+  --texto: #e8eef8; --texto-2: #a3aec0; --texto-3: #8a96a8; /* 5,2:1 sobre --superficie-2 */
+  --borda: #243044; --borda-forte: #34425a;
+  --ok: #5fd08a; --ok-fundo: #10301d; --aviso: #ffd37a; --aviso-fundo: #3a2a05; --erro: #ff8a8f; --erro-fundo: #3d1316;
+  --sombra: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35); --sombra-alta: 0 10px 30px rgba(0,0,0,.6);
+  --placa-fundo: #f4f6f8; --placa-texto: #1b1b1b; --placa-dica: #656c78;
+  --foco: #f5b400; --foco-inverso: #0b4ea2;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; height: 100%; }
+/* Tamanho da fonte do sistema: os textos usam rem, então a configuração "Tamanho da fonte" do Android (Chrome muda o tamanho
+   base) escala o app inteiro. No iPhone/iPad o Safari só obedece ao "Tamanho do texto" do iOS quando o tamanho base vem de
+   -apple-system-body (17px no ajuste padrão, maior ou menor conforme o aparelho); a família continua a do app (body). */
+@supports (font: -apple-system-body) and (-webkit-touch-callout: none) {
+  html { font: -apple-system-body; }
+}
+body {
+  margin: 0; min-height: 100%; background: var(--fundo); color: var(--texto);
+  font: 1rem/1.45 var(--fonte); -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent;
+  padding-bottom: calc(var(--abas-altura) + var(--sa-fundo));
+}
+img { display: block; max-width: 100%; }
+a { color: var(--mg); }
+button { font: inherit; color: inherit; }
+h1, h2, h3 { font-family: var(--cond); text-transform: uppercase; letter-spacing: .01em; line-height: 1.05; margin: 0; }
+h1 { font-size: 1.875rem; font-weight: 800; }
+h2 { font-size: 1.25rem; font-weight: 700; }
+h3 { font-size: 1.0625rem; font-weight: 700; }
+:focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; border-radius: 6px; }
+/* o anel fica 2px fora do elemento, então conta o fundo em volta: amarelo na foto ampliada (sempre escura);
+   a barra de atualização tem o fundo invertido (escura no tema claro, clara no escuro) */
+.zoom { --foco: #f5b400; }
+.aviso-atualizar { --foco: var(--foco-inverso); }
+.tela:focus { outline: none; } /* o foco vai para o conteúdo ao trocar de tela (sem anel na área inteira) */
+.pular { position: absolute; left: -999px; top: 0; background: var(--superficie); color: var(--texto); padding: 12px 16px; z-index: 100; border-radius: 10px; box-shadow: var(--sombra-alta); font-weight: 600; }
+.pular:focus { left: 12px; top: 12px; }
+[hidden] { display: none !important; }
+.visualmente-oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ---------- topo ---------- */
+.topo {
+  position: sticky; top: 0; z-index: 20;
+  /* a faixa da barra de status (iOS black-translucent) fica azul MG no tema claro: a hora/bateria em branco continua legível */
+  background: linear-gradient(var(--topo-faixa) 0, var(--topo-faixa) var(--sa-topo), var(--superficie) var(--sa-topo), var(--superficie) 100%);
+  /* nas telas largas (tablet, computador) o conteúdo do topo alinha com a coluna de 720px das telas */
+  padding: calc(var(--sa-topo) + 8px) max(calc(16px + var(--sa-dir)), calc((100% - 720px) / 2 + 16px)) 8px max(calc(16px + var(--sa-esq)), calc((100% - 720px) / 2 + 16px));
+  min-height: calc(56px + var(--sa-topo)); display: flex; align-items: center; gap: 8px;
+  border-bottom: 1px solid var(--borda);
+}
+.topo-logo { height: 36px; width: auto; padding: 3px 6px; border-radius: 8px; background: var(--logo-chip); }
+.topo-logo-link { display: flex; align-items: center; flex: 1; min-width: 0; min-height: 44px; }
+.topo-titulo { flex: 1; min-width: 0; margin: 0; font: 700 1.25rem/1.1 var(--cond); text-transform: uppercase; letter-spacing: .02em; overflow-wrap: anywhere; } /* o título quebra em 2 linhas com zoom ou fonte grande, em vez de "Linhas de produ…" */
+.topo-sub { display: block; font: 500 .75rem/1.2 var(--fonte); text-transform: none; letter-spacing: 0; color: var(--texto-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.btn-icone {
+  width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; display: inline-flex;
+  align-items: center; justify-content: center; cursor: pointer; color: var(--texto); flex: 0 0 auto;
+}
+.btn-icone:active { background: var(--superficie-2); }
+.btn-icone svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.btn-icone.voltar { margin-left: -8px; }
+
+/* aviso discreto de "Sem conexão" (navigator.onLine): fica logo abaixo do topo, no fluxo da página, e some ao voltar a conexão */
+.aviso-offline { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 16px; background: var(--aviso-fundo); color: var(--aviso); font: 600 .8125rem/1.3 var(--fonte); text-align: center; border-bottom: 1px solid color-mix(in srgb, var(--aviso) 25%, transparent); }
+.aviso-offline svg { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- telas ---------- */
+.tela { padding: 16px calc(16px + var(--sa-dir)) 24px calc(16px + var(--sa-esq)); max-width: 720px; margin: 0 auto; }
+.entrada-tela > * + * { margin-top: 16px; }
+.entrada-tela > .nota-legal { margin-top: 20px; }
+.secao { margin-top: 24px; }
+.secao-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.secao-cab .link { font: 600 .875rem var(--fonte); text-decoration: none; padding: 14px 0 14px 12px; margin: -14px 0; }
+.rotulo { display: block; font: 600 .75rem/1.2 var(--cond); text-transform: uppercase; letter-spacing: .1em; color: var(--texto-2); margin-bottom: 6px; }
+.ajuda { font-size: .8125rem; color: var(--texto-2); margin: 8px 0 0; }
+.cartao { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); padding: 16px; box-shadow: var(--sombra); }
+.cartao + .cartao { margin-top: 12px; }
+.chamada { font-size: .9375rem; color: var(--texto-2); margin: 6px 0 0; }
+
+/* ---------- campos ---------- */
+.campo { display: block; }
+.campo + .campo, .entrada-wrap + .campo, .seletor > .campo ~ .campo { margin-top: 12px; }
+.aviso-form:not(:empty) { margin-top: 12px; }
+.entrada, .select {
+  width: 100%; height: 52px; border: 1.5px solid var(--borda-forte); border-radius: var(--raio-p); padding: 0 14px;
+  font: 500 1rem var(--fonte); background: var(--superficie); color: var(--texto); appearance: none; -webkit-appearance: none;
+}
+.entrada::placeholder { color: var(--texto-3); }
+.entrada:focus, .select:focus { border-color: var(--mg); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--mg) 22%, transparent); }
+.entrada:focus-visible, .select:focus-visible { outline: 3px solid var(--foco); outline-offset: 0; box-shadow: none; }
+.select:disabled { color: var(--texto-3); background: var(--superficie-2); }
+.select-wrap { position: relative; }
+.select-wrap::after {
+  content: ""; position: absolute; right: 16px; top: 50%; width: 9px; height: 9px; margin-top: -7px;
+  border-right: 2px solid var(--texto-2); border-bottom: 2px solid var(--texto-2); transform: rotate(45deg); pointer-events: none;
+}
+.select { padding-right: 40px; }
+.grade-2 .select { padding: 0 32px 0 12px; }
+.grade-2 .select-wrap::after { right: 12px; }
+.entrada-wrap { position: relative; }
+.entrada-wrap .entrada { padding-left: 44px; }
+.entrada-wrap > svg { position: absolute; left: 14px; top: 50%; width: 20px; height: 20px; margin-top: -10px; fill: none; stroke: var(--texto-3); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.entrada-wrap .limpar { position: absolute; right: 4px; top: 4px; width: 44px; height: 44px; border: 0; background: transparent; color: var(--texto-2); font-size: 22px; border-radius: 10px; cursor: pointer; }
+/* linha de busca (Início e Busca): campo + botão na mesma linha, 56px. A lupa fica só no botão (dentro do campo sobrava
+   pouco espaço); no celular (linha com menos de 24rem: 390 e 360 px) o botão é só a lupa, 56x56, para o placeholder
+   "Código, nº original ou nome" caber inteiro; em tablet e computador o botão traz o texto "Buscar" */
+.busca-linha { display: flex; gap: 8px; container-type: inline-size; }
+.busca-linha .entrada-wrap { flex: 1 1 auto; min-width: 0; }
+.busca-linha .entrada-wrap > svg { display: none; }
+.busca-linha .entrada { height: 56px; padding-left: 14px; padding-right: 12px; }
+.busca-linha .entrada-wrap .limpar { top: 6px; }
+.busca-linha .entrada-wrap:has(.limpar:not([hidden])) .entrada { padding-right: 48px; }
+.entrada::-webkit-search-cancel-button, .entrada::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; } /* o × é o do app (.limpar); com o nativo apareciam dois */
+.busca-linha .btn-buscar { flex: 0 0 auto; width: auto; min-height: 56px; padding: 0 18px; gap: 8px; }
+@container (max-width: 24rem) {
+  .busca-linha .btn-buscar { width: 56px; padding: 0; }
+  .busca-linha .btn-buscar span { display: none; }
+}
+/* Início compacto (pedido do Filipe): seções mais juntas, títulos menores, cartão do veículo com menos espaço entre os campos */
+.inicio > * + * { margin-top: 14px; }
+.inicio .secao { margin-top: 14px; }
+.inicio .secao-busca { margin-top: 0; }
+.inicio h2 { font-size: 1.0625rem; }
+.inicio .secao-cab { margin-bottom: 8px; }
+.cartao-compacto { padding: 12px 14px 14px; }
+.titulo-cartao { margin-bottom: 10px; }
+.cartao-compacto .campo + .campo, .cartao-compacto .seletor > .campo ~ .campo { margin-top: 8px; }
+.cartao-compacto .rotulo { margin-bottom: 3px; }
+.cartao-compacto .seletor > .campo:last-child { margin-top: 10px; }
+.cartao-compacto .ajuda { margin-top: 8px; }
+/* cartão discreto "Tem a placa? Buscar pela placa": uma linha com seta, abre a tela Placa */
+.cartao-link { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; min-height: 56px; text-decoration: none; color: var(--texto); }
+.cartao-link-ic { flex: 0 0 36px; width: 36px; height: 36px; border-radius: 10px; background: var(--superficie-2); color: var(--texto-2); display: inline-flex; align-items: center; justify-content: center; }
+.cartao-link-ic svg, .cartao-link-seta svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cartao-link-txt { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: .875rem; color: var(--texto-2); line-height: 1.3; }
+.cartao-link-txt b { font: 700 .9375rem var(--fonte); color: var(--texto); }
+.cartao-link-seta { flex: 0 0 auto; color: var(--texto-3); display: inline-flex; }
+.cartao-link:active { background: var(--superficie-2); }
+.grade-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; } /* minmax(0): os botões "Baixar PNG/SVG" encolhem em vez de rolar a tela com zoom 150% */
+.grade-2 .campo + .campo { margin-top: 0; }
+
+/* placa estilo Mercosul */
+.placa-wrap { position: relative; margin-top: 4px; }
+.placa-topo {
+  display: flex; align-items: center; justify-content: space-between; background: var(--placa-faixa); color: #fff;
+  border-radius: 12px 12px 0 0; padding: 4px 12px; font: 700 11px/1 var(--cond); letter-spacing: .22em;
+}
+.placa-topo .bandeira { width: 18px; height: 12px; border-radius: 2px; background: #009c3b; position: relative; overflow: hidden; }
+.placa-topo .bandeira::before { content: ""; position: absolute; left: 3px; top: 2px; width: 12px; height: 8px; background: #ffdf00; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.placa-topo .bandeira::after { content: ""; position: absolute; left: 6.5px; top: 3.5px; width: 5px; height: 5px; border-radius: 50%; background: #002776; }
+.entrada-placa {
+  width: 100%; height: 72px; border: 2.5px solid #1b1b1b; border-top: 0; border-radius: 0 0 12px 12px;
+  background: var(--placa-fundo); color: var(--placa-texto); text-align: center; text-transform: uppercase;
+  font: 800 38px/1 var(--cond); letter-spacing: .18em; padding: 0 12px 0 calc(12px + .18em); appearance: none;
+}
+.entrada-placa::placeholder { color: var(--placa-dica); letter-spacing: .03em; text-transform: none; font-size: 24px; font-weight: 600; } /* dica em vez de um exemplo de placa: cinza com letras parecia placa já digitada */
+.entrada-placa:focus { outline: none; box-shadow: 0 0 0 4px rgba(245,180,0,.55); }
+.entrada-placa:focus-visible { outline: 3px solid #f5b400; outline-offset: 2px; box-shadow: none; }
+
+/* ---------- botões ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 8px 20px;
+  border-radius: var(--raio-p); border: 1.5px solid transparent; font: 700 1.0625rem/1.1 var(--cond); text-transform: uppercase; text-align: center;
+  letter-spacing: .06em; text-decoration: none; cursor: pointer; width: 100%; transition: transform .12s, background-color .15s, box-shadow .15s;
+}
+.btn:active { transform: scale(.985); }
+.btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+.btn-primario { background: var(--btn-fundo); color: var(--mg-texto-sobre); box-shadow: 0 6px 16px color-mix(in srgb, var(--mg) 35%, transparent); }
+.btn-primario:hover { background: var(--btn-fundo-hover); }
+.btn-contorno { background: transparent; color: var(--mg); border-color: var(--mg); }
+.btn-contorno:hover { background: var(--mg-claro); }
+.btn-neutro { background: var(--superficie-2); color: var(--texto); border-color: var(--borda); }
+.btn-amarelo { background: #f5b400; color: #1b1b1b; box-shadow: 0 6px 16px rgba(245,180,0,.35); }
+.btn-amarelo:hover { background: #ffc21a; }
+.btn-mini { min-height: 44px; padding: 0 14px; font-size: .9375rem; width: auto; }
+.btn[disabled] { opacity: .6; cursor: default; }
+.btn + .btn { margin-top: 10px; }
+/* botão com rótulo em duas linhas (Sobre: "Sou distribuidor" + explicação): não quebra no celular */
+.btn-duplo { padding: 8px 16px; }
+.btn-duplo-txt { display: flex; flex-direction: column; align-items: flex-start; text-align: left; min-width: 0; line-height: 1.15; }
+.btn-duplo-txt small { font: 500 .8125rem/1.25 var(--fonte); text-transform: none; letter-spacing: 0; color: var(--texto-2); margin-top: 2px; }
+.linha-btn { display: flex; flex-wrap: wrap; gap: 10px; } /* com zoom ou fonte grande o 2º botão desce em vez de sair da tela */
+.linha-btn .btn { margin: 0; flex: 1 1 auto; min-width: 0; }
+.carregando::after {
+  content: ""; width: 18px; height: 18px; border: 2.5px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: girar .7s linear infinite; margin-left: 4px;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
+
+/* ---------- chips ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips.rolar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px; }
+.chips.rolar::-webkit-scrollbar { display: none; }
+/* chips roláveis (JS rolavel): degradê na borda direita enquanto houver chips escondidos à direita (tem-mais) e na
+   esquerda quando a linha já rolou e há chips escondidos atrás (tem-antes, ex.: "Todos" e "mais" na lista de anos) */
+.rolar-wrap { position: relative; margin: 0 -16px; }
+.rolar-wrap > .chips.rolar { margin: 0; }
+.rolar-wrap::before, .rolar-wrap::after { content: ""; position: absolute; top: 0; bottom: 0; width: 56px; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.rolar-wrap::after { right: 0; background: linear-gradient(90deg, transparent, var(--fundo) 70%); }
+.rolar-wrap::before { left: 0; width: 40px; background: linear-gradient(270deg, transparent, var(--fundo) 70%); }
+.rolar-wrap.tem-mais::after { opacity: 1; }
+.rolar-wrap.tem-antes::before { opacity: 1; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
+  border: 1.5px solid var(--borda-forte); background: var(--superficie); color: var(--texto); font: 600 .875rem var(--fonte);
+  text-decoration: none; cursor: pointer; white-space: nowrap;
+}
+.chip.ativo { background: var(--btn-fundo); border-color: var(--btn-fundo); color: #fff; }
+.chip-pequeno { min-height: 40px; padding: 0 12px; font-size: .8125rem; position: relative; }
+.chip-pequeno::after { content: ""; position: absolute; left: 0; right: 0; top: -2px; bottom: -2px; } /* área de toque de 44px sem crescer o chip */
+.etiqueta { display: inline-block; padding: 3px 8px; border-radius: 6px; font: 700 .75rem/1.2 var(--cond); text-transform: uppercase; letter-spacing: .06em; }
+.etiqueta-aviso { background: var(--aviso-fundo); color: var(--aviso); }
+
+/* cartão "Ver peças para Fiat Uno Mille 2005 1.0" acima dos resultados por texto, quando a busca cita um veículo da tabela */
+.cartao-veic { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 12px; min-height: 64px; text-decoration: none; color: var(--texto); border-color: var(--mg); }
+.cartao-veic:hover { background: var(--superficie-2); }
+.cv-icone { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%; background: var(--mg-claro); color: var(--mg-texto-claro); display: inline-flex; align-items: center; justify-content: center; }
+.cv-icone svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cv-txt { flex: 1 1 auto; min-width: 0; }
+.cv-txt b { display: block; font: 700 1rem/1.25 var(--fonte); color: var(--mg-texto-claro); overflow-wrap: anywhere; }
+.cv-txt small { display: block; margin-top: 2px; font-size: .8125rem; color: var(--texto-2); }
+.cv-seta { flex: 0 0 auto; width: 20px; height: 20px; color: var(--texto-3); fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+/* com 2 ou 3 linhas combinando ("corsa mangueira"): o cartão vira bloco, a parte de cima abre o veículo inteiro e os chips abrem cada linha */
+.cartao-veic-linhas { display: block; padding: 0; }
+.cartao-veic-linhas:hover { background: var(--superficie); }
+.cv-principal { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 64px; text-decoration: none; color: var(--texto); border-radius: var(--raio) var(--raio) 0 0; }
+.cv-principal:hover { background: var(--superficie-2); }
+.cv-chips { padding: 0 14px 12px; }
+.cv-chips .chip { min-height: 44px; border-color: var(--mg); color: var(--mg-texto-claro); background: var(--mg-claro); max-width: 100%; white-space: normal; text-align: left; padding-top: 6px; padding-bottom: 6px; }
+
+/* ---------- status / vazio ---------- */
+.status { padding: 14px 16px; border-radius: var(--raio-p); font-size: .9375rem; display: flex; gap: 10px; align-items: flex-start; }
+.status svg { width: 22px; height: 22px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.status.info { background: var(--mg-claro); color: var(--mg-texto-claro); }
+.status.aviso { background: var(--aviso-fundo); color: var(--aviso); }
+.status.erro { background: var(--erro-fundo); color: var(--erro); }
+.status.ok { background: var(--ok-fundo); color: var(--ok); }
+.aviso-parcial { align-items: center; margin-bottom: 12px; } /* busca por texto antes de detalhes.json: "Carregando aplicações e números originais…" */
+.aviso-parcial .abrindo-giro { width: 18px; height: 18px; border-width: 2.5px; border-color: color-mix(in srgb, currentColor 30%, transparent); border-top-color: currentColor; }
+.vazio { text-align: center; padding: 32px 16px; color: var(--texto-2); }
+.vazio svg { width: 56px; height: 56px; margin: 0 auto 12px; fill: none; stroke: var(--texto-3); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.vazio h2 { color: var(--texto); margin-bottom: 6px; font-size: 1.125rem; }
+.vazio p { margin: 0 0 14px; }
+
+/* ---------- lista de peças ---------- */
+.lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.item {
+  display: grid; grid-template-columns: 96px 1fr auto; gap: 12px; align-items: center; background: var(--superficie);
+  border: 1px solid var(--borda); border-radius: 14px; padding: 10px; text-decoration: none; color: inherit; min-height: 96px;
+  box-shadow: var(--sombra); transition: transform .12s;
+}
+.item:active { transform: scale(.99); }
+.item-seta { width: 20px; height: 20px; fill: none; stroke: var(--texto-3); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.item-cod { font: 800 1.25rem/1 var(--cond); color: var(--mg); letter-spacing: .02em; }
+.item-nome { font: 600 .9375rem/1.25 var(--fonte); margin-top: 3px; color: var(--texto); }
+.item-apl { font-size: .8125rem; color: var(--texto-2); margin-top: 4px; line-height: 1.3; }
+.item-apl b { color: var(--texto); font-weight: 600; }
+.item .etiqueta { margin-top: 6px; }
+.foto { /* miniatura na proporção real das fotos da loja (20:11): a foto preenche a caixa, sem faixa branca em cima e embaixo */
+  position: relative; width: 96px; height: 53px; border-radius: 10px; overflow: hidden; background: var(--superficie); border: 1px solid var(--borda);
+  display: flex; align-items: center; justify-content: center;
+}
+.foto.ok { background: #fff; } /* fundo branco só quando a foto (fundo branco da loja) carregou */
+.foto img { width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity .25s; }
+.foto img.ok { opacity: 1; }
+.foto::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--esq-a) 0%, var(--esq-b) 50%, var(--esq-a) 100%); background-size: 200% 100%; animation: brilho 1.2s linear infinite; }
+.foto.ok::before, .foto.sem::before { display: none; }
+.foto.sem { background: var(--superficie-2); }
+.foto.sem svg { width: 34px; height: 34px; stroke: var(--texto-3); fill: none; stroke-width: 1.6; }
+.foto .sem-txt { position: absolute; bottom: 4px; left: 0; right: 0; font: 600 10px/1 var(--cond); text-transform: uppercase; letter-spacing: .08em; color: var(--texto-3); text-align: center; }
+@keyframes brilho { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.grupo-cab { display: flex; align-items: baseline; justify-content: space-between; margin: 20px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--borda); }
+.grupo-cab h3 { font-size: .9375rem; color: var(--texto-2); letter-spacing: .06em; }
+.grupo-cab small { color: var(--texto-3); font-size: .8125rem; }
+.res-cab { margin-bottom: 12px; } /* "N peças encontradas" não encosta na lista (em #/busca e #/linha fica dentro do bloco de resultados) */
+.res-cab h2 { font-size: 1.5rem; }
+.res-cab p { margin: 4px 0 0; color: var(--texto-2); font-size: .875rem; }
+.res-cab .placa-tag { display: inline-flex; align-items: center; gap: 6px; font: 700 .8125rem var(--cond); letter-spacing: .12em; background: var(--placa-fundo); color: var(--placa-texto); border: 1.5px solid #1b1b1b; border-radius: 6px; padding: 2px 8px; margin-right: 8px; }
+
+/* "Abrindo o catálogo…" fica no index.html até o app.js montar a 1ª tela (3G: o CSS chega ~3 s antes do JS) */
+.abrindo { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 40vh; color: var(--texto-2); font: 600 1rem var(--fonte); }
+.abrindo-giro { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--borda-forte); border-top-color: var(--mg); animation: girar .9s linear infinite; flex: 0 0 auto; }
+@keyframes girar { to { transform: rotate(360deg); } }
+/* esqueleto */
+.esqueleto { display: grid; gap: 10px; }
+.esq-item { height: 96px; border-radius: 14px; background: var(--superficie); border: 1px solid var(--borda); position: relative; overflow: hidden; }
+.esq-item::after, .esq-bloco::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--texto) 6%, transparent) 50%, transparent 100%); background-size: 200% 100%; animation: brilho 1.2s linear infinite; }
+.esq-bloco { position: relative; overflow: hidden; border-radius: 10px; background: var(--superficie-2); }
+
+/* ---------- linhas ---------- */
+.grade-linhas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; container-type: inline-size; } /* minmax(0): o cartão encolhe e a palavra longa quebra em vez de rolar a tela (zoom 150%, fonte grande) */
+/* fonte grande do sistema (rem): com menos de 19rem de largura (328px em 16px = duas colunas; em 20px ou 24px já não cabe
+   "MANGUEIRAS" na coluna), os cartões ocupam a linha inteira em vez de partir as palavras; a consulta de contêiner usa o rem
+   do html (a @media abaixo, em px, não acompanha a escala da fonte e fica como reserva para navegadores antigos) */
+.linha-card {
+  display: flex; flex-direction: column; background: var(--superficie); border: 1px solid var(--borda); border-radius: 14px; overflow: hidden;
+  text-decoration: none; color: inherit; min-height: 118px; box-shadow: var(--sombra); transition: transform .12s;
+}
+.linha-card:active { transform: scale(.98); }
+/* foto de uma peça típica da linha (FOTO_LINHA em app.js), como o menu Produtos do site: caixa na proporção das fotos da
+   loja (20:11) que fica branca quando a foto carrega — também no tema escuro, para a peça (fundo branco da loja) ler bem;
+   antes dela, esqueleto; sem foto (offline no 1º acesso, CDN fora do ar), o ícone da linha no azul claro */
+.linha-foto { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 72px; aspect-ratio: 20 / 11; background: var(--superficie-2); border-bottom: 1px solid var(--borda); overflow: hidden; }
+.linha-foto.ok { background: #fff; }
+.linha-foto img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity .25s; }
+.linha-foto.ok img { opacity: 1; }
+.linha-foto.aguardando::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--esq-a) 0%, var(--esq-b) 50%, var(--esq-a) 100%); background-size: 200% 100%; animation: brilho 1.2s linear infinite; }
+.linha-foto svg { display: none; width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.linha-foto.icone { background: var(--mg-claro); color: var(--mg-texto-claro); }
+.linha-foto.icone svg { display: block; }
+.linha-txt { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 12px; min-width: 0; }
+.linha-card b { font: 700 1rem/1.15 var(--cond); text-transform: uppercase; letter-spacing: .02em; hyphens: auto; overflow-wrap: anywhere; } /* fonte grande: hifeniza antes de quebrar a palavra */
+@media (max-width: 299px) { .grade-linhas { grid-template-columns: minmax(0, 1fr); } } /* zoom 150% em celular estreito: uma coluna, sem partir palavras */
+.linha-card small { color: var(--texto-2); font-size: .8125rem; }
+/* fonte grande do sistema (uma coluna, ver a consulta de contêiner acima): o cartão deita, com a foto à esquerda (40%) e
+   nome e contagem à direita; fica depois das regras do cartão para valer sobre elas */
+@container (max-width: 19rem) {
+  .linha-card { grid-column: 1 / -1; flex-direction: row; }
+  .linha-foto { flex: 0 0 40%; width: 40%; min-height: 72px; align-self: stretch; aspect-ratio: auto; border-bottom: 0; border-right: 1px solid var(--borda); }
+  .linha-txt { flex: 1; justify-content: center; }
+}
+
+/* ---------- detalhe ---------- */
+.detalhe-topo > * + * { margin-top: 16px; } /* foto e cabeçalho da ficha: um abaixo do outro (lado a lado só no celular deitado) */
+/* proporção real das fotos da loja (1600×880 = 20:11, a mesma caixa 400/220 do buscador do site): a caixa já nasce com a altura certa
+   e o esqueleto (.esq-bloco) usa esta mesma classe, então nada pula quando a foto chega */
+.detalhe-foto { position: relative; width: 100%; aspect-ratio: 20 / 11; border-radius: var(--raio); overflow: hidden; background: var(--superficie); border: 1px solid var(--borda); }
+.detalhe-foto .foto { width: 100%; height: 100%; border: 0; border-radius: 0; }
+.detalhe-foto .foto img { padding: 8px; }
+.detalhe-cod { font: 800 2.125rem/1 var(--cond); color: var(--mg); letter-spacing: .02em; }
+.detalhe-nome { font: 600 1.25rem/1.25 var(--fonte); margin-top: 4px; }
+.detalhe-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.tabela { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.tabela th { text-align: left; font: 600 .75rem/1.2 var(--cond); text-transform: uppercase; letter-spacing: .1em; color: var(--texto-2); padding: 0 8px 8px 0; }
+.tabela td { padding: 9px 8px 9px 0; border-top: 1px solid var(--borda); vertical-align: top; }
+.tabela td:first-child { font-weight: 600; }
+.tabela td.silencio { color: var(--texto-3); }
+.oem { display: flex; flex-wrap: wrap; gap: 8px; user-select: contain; -webkit-user-select: contain; } /* no computador, arrastar o mouse sobre os números não seleciona o resto da página */
+.oem-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.oem-cab .btn { width: auto; }
+.oem code { font: 600 .9375rem/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--superficie-2); border: 1px solid var(--borda); border-radius: 8px; padding: 9px 11px; user-select: all; -webkit-user-select: all; cursor: text; } /* um clique seleciona o número inteiro */
+.nota-legal { font-size: .75rem; color: var(--texto-3); text-align: center; margin: 8px 0 0; }
+.acoes-fixas { margin-top: 16px; }
+.acoes-fixas .status + .btn { margin-top: 10px; }
+/* ficha: "Buscar esta peça para outro veículo" abaixo da tabela de aplicação (link de uma linha, toque de 44px, sem cartão novo) */
+.link-outro-veic { margin: 2px 0 -8px; }
+/* ficha da peça: salvar em Minhas peças + compartilhar (botões menores, toque de 44px) */
+.acoes-peca { margin-top: 14px; }
+.btn-acao { min-height: 44px; padding: 0 12px; font-size: .9375rem; letter-spacing: .04em; width: auto; flex: 1; gap: 8px; }
+.btn-acao svg { width: 18px; height: 18px; }
+.btn-favorito[aria-pressed="true"] { background: var(--mg-claro); border-color: var(--mg); color: var(--mg-texto-claro); }
+.btn-favorito[aria-pressed="true"] svg { fill: currentColor; }
+/* "Compartilhar esta busca" nos resultados por veículo: link discreto, mas com área de toque de 44px */
+.res-acoes { margin-top: 2px; }
+/* chips de ano/motor nos resultados por veículo: rótulo fixo à esquerda, chips rolam até a borda direita */
+.filtros-veic:not(:empty) { margin-top: 10px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.filtro-veic { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.filtro-rotulo { flex: 0 0 44px; font: 700 .75rem var(--cond); letter-spacing: .08em; text-transform: uppercase; color: var(--texto-3); }
+.filtro-veic .rolar-wrap { flex: 1 1 auto; min-width: 0; margin: 0 -16px 0 0; }
+.filtro-veic .chips.rolar { padding: 2px 16px 2px 0; }
+.filtro-veic .chip { min-height: 44px; flex: 0 0 auto; }
+/* "mais" nas pontas da lista de anos: abre os anos escondidos daquele lado */
+.chip-mais { border-style: dashed; border-color: var(--mg); color: var(--mg); background: transparent; }
+/* seletor "Motor completo" (descrições completas da tabela) abaixo dos chips de motor */
+.filtro-completo .select-wrap { flex: 1 1 auto; min-width: 0; max-width: 360px; }
+.filtro-completo .select-motor { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* mais específico que .select-mini (width: auto), senão a opção mais longa alarga a página */
+.filtro-completo .filtro-col { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+/* a caixa fechada corta a descrição longa com reticências; a escolhida aparece inteira aqui embaixo */
+.motor-escolhido { margin: 0; font-size: .8125rem; line-height: 1.35; color: var(--texto-2); overflow-wrap: anywhere; }
+.motor-escolhido b { font-weight: 600; color: var(--texto); }
+.nota-pesada { margin-top: 12px; padding: 12px 14px; }
+.nota-pesada p { margin: 0 0 10px; font-size: .875rem; line-height: 1.4; color: var(--texto-2); }
+.nota-pesada .chip { min-height: 44px; }
+.link-acao { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; min-width: 44px; padding: 0; border: 0; background: transparent; color: var(--mg); font: 600 .875rem var(--fonte); cursor: pointer; }
+.link-acao svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+/* Minhas peças: cartão da busca com botão "×" fora do link */
+.secao-cont { font-size: .8125rem; color: var(--texto-3); white-space: nowrap; }
+.item-com-acao { position: relative; }
+.item-com-acao .item { grid-template-columns: 96px 1fr; padding-right: 58px; }
+.item-remover {
+  position: absolute; right: 8px; top: 50%; margin-top: -22px; width: 44px; height: 44px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--texto-3); cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.item-remover:active { background: var(--superficie-2); color: var(--texto); }
+.item-remover svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- sobre ---------- */
+.versao { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.versao .ajuda { margin: 0; }
+.versao .btn { width: auto; }
+.sobre-logo { width: 236px; margin: 8px auto 16px; padding: 10px 14px; border-radius: 12px; background: var(--logo-chip); }
+.lista-sobre { list-style: none; margin: 0; padding: 0; }
+.lista-sobre li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--borda); }
+.lista-sobre li:first-child { border-top: 0; }
+.lista-sobre + .campo { margin-top: 12px; }
+.lista-sobre svg { width: 22px; height: 22px; fill: none; stroke: var(--mg); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; margin-top: 2px; }
+.linha-opcao { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; }
+.segmentos { display: inline-flex; max-width: 100%; background: var(--superficie-2); border: 1px solid var(--borda); border-radius: 12px; padding: 2px; }
+.segmentos button { border: 0; background: transparent; min-height: 44px; padding: 0 12px; border-radius: 10px; font: 600 .875rem var(--fonte); color: var(--texto-2); cursor: pointer; flex: 1 1 auto; min-width: 0; }
+.segmentos button.ativo { background: var(--superficie); color: var(--texto); box-shadow: var(--sombra); }
+
+/* ---------- abas inferiores ---------- */
+.abas {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; background: var(--superficie);
+  border-top: 1px solid var(--borda); padding: 0 var(--sa-dir) var(--sa-fundo) var(--sa-esq);
+  backdrop-filter: saturate(180%) blur(12px); -webkit-backdrop-filter: saturate(180%) blur(12px);
+}
+.abas-lista { display: flex; flex: 1; max-width: 720px; margin: 0 auto; } /* nas telas largas as abas ficam juntas, na coluna do conteúdo */
+.aba {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: var(--abas-altura);
+  text-decoration: none; color: var(--texto-2); font: 600 .71875rem/1 var(--cond); text-transform: uppercase; letter-spacing: .08em;
+}
+.aba svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+.aba.ativa { color: var(--mg); }
+.aba.ativa svg { stroke-width: 2.3; transform: translateY(-1px); }
+.aba:focus-visible { outline-offset: -3px; border-radius: 10px; }
+
+/* ---------- instalar ---------- */
+.faixa-instalar {
+  position: fixed; left: 12px; right: 12px; bottom: calc(var(--abas-altura) + var(--sa-fundo) + 10px); z-index: 25; max-width: 696px; margin: 0 auto;
+  display: flex; align-items: center; gap: 10px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 14px;
+  padding: 8px 6px 8px 12px; box-shadow: var(--sombra-alta);
+}
+.faixa-instalar img { border-radius: 10px; }
+/* em 360 o título quebrava e a faixa passava de 100px: sem o ícone (o cartão do Início continua com ele), título em
+   uma linha e texto menor em até duas linhas; a faixa fica com ~60px e o toast volta a ficar logo acima (+90px) */
+@media (max-width: 374px) {
+  .faixa-instalar { gap: 8px; padding: 6px 2px 6px 12px; }
+  .faixa-instalar img { display: none; }
+  .faixa-txt { font-size: .75rem; line-height: 1.3; }
+  .faixa-txt b { font-size: .875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .faixa-instalar .btn-mini { padding: 0 10px; font-size: .875rem; }
+}
+/* no Início já existe o cartão "Instale o app" (cartaoInstalar): a faixa flutuante fica só nas outras telas */
+.rota-inicio .faixa-instalar, .rota-instalar .faixa-instalar { display: none !important; }
+.faixa-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: .8125rem; color: var(--texto-2); }
+.faixa-txt b { font: 700 .9375rem var(--fonte); color: var(--texto); }
+.btn-fechar { width: 44px; height: 44px; border: 0; background: transparent; font-size: 26px; color: var(--texto-2); cursor: pointer; border-radius: 10px; flex: 0 0 auto; }
+.instalar-cartao { display: flex; align-items: center; gap: 14px; }
+.instalar-cartao img { width: 56px; height: 56px; border-radius: 14px; box-shadow: var(--sombra); }
+.instalar-cartao .faixa-txt { font-size: .875rem; }
+.instalar-cartao .btn { width: auto; }
+
+/* folha (bottom sheet) */
+.folha-fundo { position: fixed; inset: 0; z-index: 40; background: rgba(6,15,30,.55); display: flex; align-items: flex-end; }
+.folha {
+  width: 100%; max-width: 560px; margin: 0 auto; background: var(--superficie); border-radius: 22px 22px 0 0; padding: 10px 20px calc(20px + var(--sa-fundo));
+  animation: subir .25s ease-out; box-shadow: var(--sombra-alta);
+}
+.folha-puxador { width: 40px; height: 5px; border-radius: 3px; background: var(--borda-forte); margin: 0 auto 14px; }
+.folha h2 { margin-bottom: 14px; }
+.passos-ios, .passos { list-style: none; margin: 0 0 18px; padding: 0; }
+.passos-ios li, .passos li { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--borda); font-size: .9375rem; }
+.passos-ios li:first-child, .passos li:first-child { border-top: 0; }
+.passos { margin: 10px 0 0; }
+.passos li { align-items: flex-start; line-height: 1.4; }
+.passo-num { width: 32px; height: 32px; border-radius: 50%; background: var(--mg-claro); color: var(--mg-texto-claro); font: 700 16px/1 var(--cond); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; margin-top: 1px; }
+.passos + .ajuda { margin-top: 2px; }
+/* tela Instalar: o QR fica sempre em caixa branca (contraste para a câmera, nos dois temas) */
+.qr-caixa { width: 232px; max-width: 100%; min-height: 232px; margin: 14px auto 0; padding: 6px; border-radius: 14px; background: #fff; border: 1px solid var(--borda); display: flex; align-items: center; justify-content: center; }
+.qr-caixa svg { width: 100%; height: auto; display: block; }
+.qr-espera { font-size: .8125rem; color: #566172; }
+.qr-url { margin: 10px 0 14px; text-align: center; font-size: .8125rem; color: var(--texto-2); overflow-wrap: anywhere; }
+.qr-cartao h2, .cartao-passos h2, .cartao-agora h2 { margin-bottom: 4px; }
+.cartao-agora .campo { margin-top: 12px; }
+.qr-cartao .grade-2 { margin-top: 12px; }
+.qr-cartao .grade-2 .btn { padding-left: 8px; padding-right: 8px; font-size: .9375rem; }
+.instalar-cartao .faixa-txt .link-acao { min-height: 44px; margin: -4px 0 -8px; justify-content: flex-start; text-align: left; align-self: flex-start; }
+@media (max-width: 400px) { /* em telas estreitas o texto ficava espremido entre o ícone e o botão: o botão desce para a linha de baixo */
+  .instalar-cartao { flex-wrap: wrap; }
+  .instalar-cartao .btn { width: 100%; flex: 1 0 100%; }
+}
+.passo-ic { width: 42px; height: 42px; border-radius: 12px; background: var(--mg-claro); color: var(--mg-texto-claro); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.passo-ic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+@keyframes subir { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.aviso-atualizar {
+  position: fixed; left: 12px; right: 12px; bottom: calc(var(--abas-altura) + var(--sa-fundo) + 10px); z-index: 26; max-width: 696px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--texto); color: var(--fundo);
+  border-radius: 12px; padding: 10px 10px 10px 16px; font-size: .875rem; box-shadow: var(--sombra-alta);
+}
+.aviso-atualizar .btn { background: #f5b400; color: #1b1b1b; flex: 0 0 auto; }
+.aviso-atualizar span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f5b400; margin-right: 8px; vertical-align: 1px; }
+
+/* toast */
+.toast { position: fixed; left: 50%; bottom: calc(var(--abas-altura) + var(--sa-fundo) + 16px); transform: translateX(-50%); max-width: min(560px, calc(100% - 32px)); background: var(--texto); color: var(--fundo); padding: 10px 16px; border-radius: 10px; font-size: .875rem; z-index: 50; box-shadow: var(--sombra-alta); animation: aparecer .2s ease-out; display: flex; align-items: center; gap: 10px; }
+/* ação no toast ("Ver"): link com 44px de toque sem engordar a tarja */
+.toast.com-acao { padding: 4px 6px 4px 16px; }
+.toast-acao { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 12px; border-radius: 8px; color: var(--fundo); font: 700 .875rem var(--fonte); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; background: color-mix(in srgb, var(--fundo) 12%, transparent); }
+
+/* com a faixa de instalar ou a barra de atualização à mostra, o toast sobe para não cobrir nenhuma das duas */
+body:has(.aviso-atualizar:not([hidden])) .toast { bottom: calc(var(--abas-altura) + var(--sa-fundo) + 90px); }
+body:not(.rota-inicio):not(.rota-instalar):has(.faixa-instalar:not([hidden])) .toast { bottom: calc(var(--abas-altura) + var(--sa-fundo) + 90px); } /* a faixa tem no máximo ~76px (também em 360) */
+
+/* recentes */
+/* Recentes: chips de veículo e de busca por texto (toque de 44px) + "Limpar" */
+.recentes .secao-cab { align-items: center; margin-bottom: 6px; }
+.recentes .chip { min-height: 44px; max-width: 100%; background: var(--superficie-2); }
+.recentes .chip svg { width: 18px; height: 18px; flex: 0 0 auto; fill: none; stroke: var(--texto-2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.recentes .chip-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+.mais { text-align: center; margin: 16px 0 0; }
+
+/* painel de resultados: filtro por linha (chips com contagem), total e ordem */
+.painel-res { margin-top: 4px; }
+.filtro-linhas .chip { min-height: 44px; flex: 0 0 auto; }
+.res-barra { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 12px; }
+.filtro-linhas + .res-barra { margin-top: 12px; }
+.res-cont { margin: 0; font: 600 .875rem var(--fonte); color: var(--texto-2); }
+.res-cont b { font: 800 1.25rem/1 var(--cond); color: var(--texto); }
+.res-cont .res-todas { min-height: 44px; margin: -12px 0; vertical-align: middle; text-decoration: underline; text-underline-offset: 3px; }
+.select-mini-wrap { flex: 0 0 auto; }
+.select-mini { width: auto; height: 44px; font-size: .875rem; padding: 0 34px 0 12px; }
+.select-mini-wrap::after { right: 13px; }
+.painel-res .grupo-cab:first-child { margin-top: 4px; }
+/* Minhas peças: ordem + "Limpar todas" com confirmação em linha */
+.minhas-barra { margin-top: 0; }
+.confirmar { margin-bottom: 12px; }
+.confirmar-corpo { flex: 1; min-width: 0; }
+.confirmar-corpo p { margin: 0 0 10px; line-height: 1.35; }
+.confirmar-corpo p:focus { outline: none; }
+.confirmar .linha-btn .btn { flex: 1; }
+
+/* estado vazio com sugestões */
+.vazio .sugestoes { list-style: none; margin: 0 0 16px; padding: 0; text-align: left; display: inline-block; max-width: 100%; }
+.vazio .sugestoes li { display: flex; gap: 8px; padding: 4px 0; font-size: .875rem; line-height: 1.4; }
+.vazio .sugestoes li::before { content: ""; flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--mg); margin-top: 7px; }
+.vazio .btn + .btn { margin-top: 10px; }
+
+/* animação de troca de tela */
+.tela > .entrada-tela { animation: aparecer .2s ease-out; }
+@keyframes aparecer { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* computador com mouse: cartões, chips, abas e botões neutros respondem ao passar o cursor (no toque nada muda) */
+@media (hover: hover) and (pointer: fine) {
+  .item:hover, .linha-card:hover, .cartao-link:hover { border-color: var(--borda-forte); background: var(--superficie-2); }
+  .chip:not(.ativo):hover { border-color: var(--mg); background: var(--mg-claro); color: var(--mg-texto-claro); }
+  .btn-neutro:hover { border-color: var(--borda-forte); background: var(--superficie); }
+  .btn-icone:hover, .aba:hover { background: var(--superficie-2); }
+  .aba:hover { color: var(--mg); border-radius: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+@media (min-width: 560px) {
+  .grade-linhas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 760px) {
+  .painel-res .lista { grid-template-columns: 1fr 1fr; } /* resultados por veículo e por texto em duas colunas: menos rolagem */
+}
+@media (display-mode: standalone) {
+  .so-navegador { display: none !important; }
+}
+
+/* ---------- ficha: ampliar a foto ---------- */
+.detalhe-foto .foto.pode-ampliar.ok { cursor: zoom-in; }
+.btn-ampliar { position: absolute; right: 8px; bottom: 8px; background: var(--superficie); border: 1px solid var(--borda); box-shadow: var(--sombra); color: var(--texto); }
+.btn-ampliar:hover { background: var(--superficie-2); }
+.detalhe-foto .foto.sem ~ .btn-ampliar { display: none; }
+
+/* foto em tela cheia: pinça, toque duplo, arrastar; igual nos dois temas (fundo escuro de visualizador) */
+.zoom-aberto, .zoom-aberto body { overflow: hidden; }
+.zoom {
+  position: fixed; inset: 0; z-index: 60; background: rgba(6,15,30,.96); touch-action: none; user-select: none; -webkit-user-select: none;
+  animation: aparecer .15s ease-out;
+}
+.zoom-palco { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: calc(var(--sa-topo) + 68px) 12px calc(var(--sa-fundo) + 56px); transition: transform .15s ease-out; }
+.zoom-img { max-width: 100%; max-height: 100%; object-fit: contain; background: #fff; border-radius: 8px; transform-origin: center center; will-change: transform; -webkit-user-drag: none; cursor: zoom-in; }
+.zoom.ampliado .zoom-img { cursor: grab; }
+.zoom-fechar {
+  position: absolute; top: calc(var(--sa-topo) + 10px); right: calc(var(--sa-dir) + 10px); width: 48px; height: 48px; border: 0; border-radius: 14px;
+  background: rgba(20,28,43,.85); border: 1px solid rgba(255,255,255,.35); color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: var(--sombra-alta);
+}
+.zoom-fechar:active { background: rgba(20,28,43,1); }
+.zoom-fechar:focus-visible { outline: 3px solid #f5b400; outline-offset: 2px; }
+.zoom-fechar svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.zoom-dica { position: absolute; left: 16px; right: 16px; bottom: calc(var(--sa-fundo) + 18px); margin: 0; text-align: center; color: rgba(255,255,255,.85); font-size: .8125rem; pointer-events: none; transition: opacity .4s; }
+.zoom-dica.some, .zoom.ampliado .zoom-dica { opacity: 0; }
+
+/* celular deitado (844x390): abas em uma linha de 48px (ícone ao lado do texto), foto da ficha limitada a 60% da altura
+   (antes a caixa 20:11 de 688 px ocupava a tela inteira) e foto ampliada usando a altura toda, com o X no canto */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root { --abas-altura: 48px; }
+  .aba { flex-direction: row; gap: 8px; }
+  .aba svg { width: 22px; height: 22px; }
+  /* topo em 52px: título e subtítulo na mesma linha (o subtítulo é o que ganha reticências); os botões de 44px continuam inteiros */
+  .topo { min-height: calc(52px + var(--sa-topo)); padding-top: calc(var(--sa-topo) + 4px); padding-bottom: 3px; } /* 4 + 44 (botão) + 3 + 1 de borda = 52 */
+  .topo-titulo { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+  .topo-sub { display: inline; margin-left: 10px; overflow: visible; }
+  /* ficha: foto à esquerda (proporção real 20:11, ~170 px de altura) e código, nome, linha e ações à direita; o código
+     aparece sem rolar (antes a foto ocupava 60vh e empurrava o cabeçalho para baixo) */
+  .detalhe-topo { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 16px; align-items: start; }
+  .detalhe-topo > * + * { margin-top: 0; }
+  .zoom-palco { padding: 12px 72px calc(var(--sa-fundo) + 36px); }
+  .zoom-dica { bottom: calc(var(--sa-fundo) + 10px); }
+}
