@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "br.com.mgpecasautomotivas.catalogo",
+      "sha256_cert_fingerprints": [
+        "6C:8C:C9:E8:53:CC:A5:C9:61:92:5F:BA:35:05:01:50:11:F9:9F:5A:45:07:EE:14:6C:87:F1:D3:95:CC:65:DA"
+      ]
+    }
+  }
+]

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Política de privacidade · MG Peças Automotivas</title>
+<meta name="description" content="Política de privacidade do app de catálogo da MG Peças Automotivas: o que fica no aparelho e o que é enviado.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b4ea2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141c2b" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" sizes="32x32" href="icones/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icones/apple-touch-icon.png">
+<link rel="canonical" href="https://mgpecasautomotivas.github.io/privacidade.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+  /* mesmas cores do app (app.css); página estática, sem JavaScript além da escolha do tema já guardada pelo app */
+  :root {
+    --mg: #0b4ea2; --mg-claro: #e3ecf8; --fundo: #f2f5f9; --superficie: #ffffff;
+    --texto: #0f1b2d; --texto-2: #4b5768; --borda: #dde4ee; --topo-faixa: #0b4ea2; --logo-chip: transparent;
+    --cond: "Barlow Condensed", "Arial Narrow", "Barlow", system-ui, sans-serif;
+    --fonte: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --mg: #4f93ee; --mg-claro: #15294a; --fundo: #0b1220; --superficie: #141c2b;
+      --texto: #e8eef8; --texto-2: #a3aec0; --borda: #243044; --topo-faixa: #141c2b; --logo-chip: #ffffff;
+    }
+  }
+  :root[data-theme="dark"] {
+    --mg: #4f93ee; --mg-claro: #15294a; --fundo: #0b1220; --superficie: #141c2b;
+    --texto: #e8eef8; --texto-2: #a3aec0; --borda: #243044; --topo-faixa: #141c2b; --logo-chip: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--fundo); color: var(--texto); font-family: var(--fonte); font-size: 1.0625rem; line-height: 1.5; }
+  .topo { background: var(--topo-faixa); color: #fff; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px; }
+  .topo-in { max-width: 720px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+  .topo img { height: 36px; width: auto; background: var(--logo-chip); border-radius: 8px; padding: 2px 6px; }
+  .topo span { font-family: var(--cond); font-weight: 700; font-size: 1.1rem; text-transform: uppercase; letter-spacing: .02em; }
+  main { max-width: 720px; margin: 0 auto; padding: 20px 16px calc(32px + env(safe-area-inset-bottom, 0px)); }
+  h1 { font-family: var(--cond); text-transform: uppercase; font-size: 1.9rem; line-height: 1.05; margin: 0 0 4px; }
+  .data { color: var(--texto-2); font-size: .95rem; margin: 0 0 16px; }
+  section { background: var(--superficie); border: 1px solid var(--borda); border-radius: 16px; padding: 16px; margin: 0 0 12px; }
+  h2 { font-family: var(--cond); text-transform: uppercase; font-size: 1.25rem; line-height: 1.1; margin: 0 0 8px; color: var(--mg); }
+  p { margin: 0 0 10px; } p:last-child { margin-bottom: 0; }
+  ul { margin: 0 0 10px; padding-left: 22px; } li { margin: 0 0 6px; }
+  a { color: var(--mg); text-underline-offset: 3px; overflow-wrap: anywhere; }
+  p, li { overflow-wrap: anywhere; }
+  a:focus-visible { outline: 3px solid var(--mg); outline-offset: 2px; border-radius: 4px; }
+  .voltar { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; text-decoration: none; border: 1px solid var(--borda); border-radius: 10px; padding: 0 16px; background: var(--superficie); color: var(--mg); }
+  .rodape { color: var(--texto-2); font-size: .95rem; margin-top: 20px; }
+</style>
+<script>
+try { var t = localStorage.getItem('mg-tema'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+</script>
+</head>
+<body>
+<header class="topo"><div class="topo-in"><img src="icones/logo-mg.png" alt="MG Peças Automotivas"><span>Catálogo MG</span></div></header>
+<main>
+  <h1>Política de privacidade</h1>
+  <p class="data">App de catálogo da MG Peças Automotivas · atualizada em 2 de novembro de 2026</p>
+
+  <section>
+    <h2>Resumo</h2>
+    <p>O app é o catálogo de peças da MG: mostra as peças, as aplicações por veículo e os números originais. Ele não pede cadastro, não tem login e não coleta dados pessoais. Não tem anúncios nem rastreadores.</p>
+  </section>
+
+  <section>
+    <h2>O que fica só no seu aparelho</h2>
+    <p>Para funcionar sem internet e lembrar o que você usou, o app guarda no próprio aparelho, e em nenhum outro lugar:</p>
+    <ul>
+      <li>as peças que você salvou em <strong>Minhas peças</strong>;</li>
+      <li>a <strong>Minha lista</strong> (códigos das peças e quantidades);</li>
+      <li>as <strong>buscas recentes</strong> e os veículos recentes (só marca, modelo, ano e motor);</li>
+      <li>as <strong>preferências</strong>: tema claro ou escuro, modelo de folha de etiquetas e avisos que você já dispensou;</li>
+      <li>uma cópia do catálogo (peças, aplicações e endereços das fotos) para abrir sem conexão.</li>
+    </ul>
+    <p>Nada disso sai do aparelho. Para apagar, use os botões "Limpar" dentro do app ou apague os dados do app nas configurações do celular. Ao desinstalar o app, tudo é apagado.</p>
+  </section>
+
+  <section>
+    <h2>Busca pela placa</h2>
+    <p>Quando você digita uma placa, ela é enviada ao serviço de consulta de placas usado pelo app, que responde apenas marca, modelo, ano e motor do veículo. É só isso que o app usa, para mostrar as peças compatíveis.</p>
+    <ul>
+      <li>O app não guarda a placa: ela fica na memória apenas enquanto a tela está aberta e não entra nos recentes.</li>
+      <li>Nenhum dado do proprietário do veículo é consultado nem exibido.</li>
+      <li>Do lado do serviço é contado apenas o número de consultas feitas, sem identificar quem consultou.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Fotos, fontes e links</h2>
+    <p>As fotos das peças vêm do site da MG. As fontes de letra vêm do Google Fonts. Como em qualquer página da internet, os servidores que entregam esses arquivos e o próprio app (GitHub Pages) recebem o endereço de internet do aparelho para poder responder; o app não envia nome, cadastro nem qualquer identificador.</p>
+    <p>Os botões "Ver no site" e "Encontre em lojas parceiras online" abrem páginas fora do app, no navegador. Nessas páginas valem as políticas de privacidade de cada site.</p>
+  </section>
+
+  <section>
+    <h2>Compartilhar, imprimir e etiquetas</h2>
+    <p>Ao usar "Compartilhar" ou "Enviar pelo WhatsApp", o app só entrega o texto ou o link ao aplicativo que você escolher; nada é enviado pelo app a outro lugar. Imprimir, salvar em PDF e gerar etiquetas acontecem inteiramente no aparelho.</p>
+  </section>
+
+  <section>
+    <h2>Permissões</h2>
+    <p>O app não pede acesso à câmera, aos contatos, à localização, ao microfone nem aos arquivos do aparelho. Precisa apenas de internet para baixar o catálogo e as fotos na primeira vez e para procurar atualizações.</p>
+  </section>
+
+  <section>
+    <h2>Crianças</h2>
+    <p>O app é uma ferramenta de consulta de peças automotivas, feita para oficinas, autopeças e mecânicos. Não é dirigido a crianças e não coleta dados de ninguém.</p>
+  </section>
+
+  <section>
+    <h2>Mudanças nesta política</h2>
+    <p>Se o app passar a funcionar de outro jeito, esta página será atualizada e a data no topo mudará. A versão em uso está sempre em <a href="https://mgpecasautomotivas.github.io/privacidade.html">mgpecasautomotivas.github.io/privacidade.html</a>.</p>
+  </section>
+
+  <p><a class="voltar" href="./#/">Voltar ao catálogo</a></p>
+  <p class="rodape">MG Peças Automotivas · Diadema-SP, Brasil</p>
+</main>
+</body>
+</html>

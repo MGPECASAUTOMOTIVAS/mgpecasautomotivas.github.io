@@ -121,4 +121,7 @@ Só com a sua autorização:
 - Endereço próprio `app.mgpecasautomotivas.com.br` (registro no DNS; ver LEIA-ME.md).
 - Qualquer mudança de cadastro (peça, aplicação, número original, nome de modelo): a lista do que espera decisão
   está em "Ideias para depois" e "Ideias grandes" no MELHORIAS.md.
-- Publicar nas lojas de aplicativos (Google Play / App Store).
+- Publicar nas lojas de aplicativos. **Google Play: tudo o que dava para preparar está pronto** (chave, configuração,
+  workflow "Android (Google Play)", página de privacidade, textos e imagens da ficha); o passo a passo do que só você pode
+  fazer (conta, US$ 25, segredos no GitHub, envio do .aab) está em `site-nuvemshop/app_catalogo/play/GUIA_GOOGLE_PLAY.md`.
+  App Store: adiada.

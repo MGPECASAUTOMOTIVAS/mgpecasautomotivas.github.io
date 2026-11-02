@@ -40,6 +40,10 @@ p/                          prévias de compartilhamento: p/<CÓDIGO>.html, uma 
 gerar_previas.py            gera a pasta p/ (acima)
 COMO_MANTER.md              guia curto, sem jargão, para o Filipe: como um dado novo chega ao app, publicar, versão, teste
 .github/workflows/pages.yml publica a raiz no GitHub Pages a cada push em main
+.github/workflows/android.yml gera o app Android (.aab/.apk) para a Google Play com o Bubblewrap (ver "Google Play" abaixo)
+twa-manifest.json           configuração do app Android (Bubblewrap/TWA); appVersionCode sobe a cada envio à Play
+.well-known/assetlinks.json Digital Asset Links (package + SHA-256 da chave de upload; acrescentar a do Google se ativar a assinatura pela Play)
+privacidade.html            política de privacidade (link exigido pela ficha da Play); estática, fora do app
 .nojekyll                   desliga o Jekyll do Pages (sem ele, arquivos e pastas começando com _ sumiriam)
 ```
 
@@ -122,9 +126,25 @@ necessária. **Não foi feito nada no Cloudflare.**
 Se o app for empacotado para as lojas (Capacitor), as origens passam a ser `capacitor://localhost` (iOS) e `https://localhost`
 (Android); acrescentar também.
 
-### App Store / Google Play (depois)
-O app já atende aos requisitos de PWA (manifest, service worker, ícones maskable, HTTPS). Para as lojas: Google Play via
-Bubblewrap/TWA (usa o mesmo endereço) e App Store via Capacitor (empacota esta pasta). Sem nada a reescrever.
+### Google Play (preparado em 02/11/2026; envio manual pelo Filipe)
+O app vai para a Play como Trusted Web Activity (TWA) gerada pelo Bubblewrap: um app Android que abre
+https://mgpecasautomotivas.github.io/ em tela cheia. Arquivos no repositório:
+- `twa-manifest.json` — configuração do Bubblewrap (packageId `br.com.mgpecasautomotivas.catalogo`, nome, cores, ícones
+  publicados, atalhos do manifest, `appVersion` = versão do config.js, `appVersionCode` inteiro crescente — **aumentar a
+  cada .aab enviado à Play**; `signingKey` aponta para `mg-app-upload.keystore`, que NÃO está no repositório).
+- `.github/workflows/android.yml` — "Android (Google Play)": Run workflow (ou tag `android-v*`) gera o `.aab` e o `.apk`
+  assinados com a chave de upload vinda dos segredos `KEYSTORE_B64` e `KEYSTORE_PASSWORD` (ver
+  `site-nuvemshop/app_catalogo/play/GUIA_GOOGLE_PLAY.md`); artefatos por 30 dias; release do GitHub quando for tag. Sem
+  os segredos, falha no 1º passo com a mensagem em português. Não envia nada para a Play.
+- `.well-known/assetlinks.json` — Digital Asset Links: o Android confere este arquivo para abrir o app sem a barra do
+  Chrome. Traz a impressão SHA-256 da chave de upload. **Se a "Assinatura de apps pelo Google Play" for ativada (recomendado),
+  a impressão da chave de assinatura do Google (Play Console → Integridade do app) precisa ser ACRESCENTADA à lista
+  `sha256_cert_fingerprints`, mantendo a atual.** O Pages serve a pasta `.well-known` porque o `.nojekyll` existe.
+- `privacidade.html` — política de privacidade exigida pela ficha da loja (https://mgpecasautomotivas.github.io/privacidade.html);
+  estática, nos dois temas, sem contato. Não está linkada no app de propósito (visual aprovado intocado).
+Fora do repositório, em `site-nuvemshop/app_catalogo/play/`: `chave/` (keystore, base64, senha, sha256 — guardar em lugar
+seguro), `ficha/` (ícone, gráfico de destaque, capturas 1080×1920 e textos.md) e o guia.
+Apple App Store: adiada (US$ 99/ano; empacotar via Capacitor quando for a hora).
 
 ## Regras seguidas
 Sem preço, sem palavras de venda, sem e-mail/WhatsApp da MG, sem distribuidores ou clientes. Só dados reais dos arquivos.

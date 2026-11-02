@@ -1,0 +1,62 @@
+{
+  "packageId": "br.com.mgpecasautomotivas.catalogo",
+  "host": "mgpecasautomotivas.github.io",
+  "name": "MG Peças Automotivas",
+  "launcherName": "MG Peças",
+  "display": "standalone",
+  "displayOverride": ["standalone", "minimal-ui"],
+  "orientation": "default",
+  "themeColor": "#0b4ea2",
+  "themeColorDark": "#141c2b",
+  "navigationColor": "#ffffff",
+  "navigationColorDark": "#141c2b",
+  "navigationDividerColor": "#dde4ee",
+  "navigationDividerColorDark": "#243044",
+  "backgroundColor": "#0b4ea2",
+  "startUrl": "/",
+  "iconUrl": "https://mgpecasautomotivas.github.io/icones/icone-512.png",
+  "maskableIconUrl": "https://mgpecasautomotivas.github.io/icones/icone-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "mg-app-upload.keystore",
+    "alias": "mgapp"
+  },
+  "appVersion": "2026.11.02-29",
+  "appVersionCode": 1,
+  "enableNotifications": false,
+  "enableSiteSettingsShortcut": true,
+  "shortcuts": [
+    {
+      "name": "Buscar pela placa",
+      "shortName": "Placa",
+      "url": "https://mgpecasautomotivas.github.io/#/placa",
+      "chosenIconUrl": "https://mgpecasautomotivas.github.io/icones/icone-192.png"
+    },
+    {
+      "name": "Buscar peça",
+      "shortName": "Busca",
+      "url": "https://mgpecasautomotivas.github.io/#/busca",
+      "chosenIconUrl": "https://mgpecasautomotivas.github.io/icones/icone-192.png"
+    },
+    {
+      "name": "Linhas de produtos",
+      "shortName": "Linhas",
+      "url": "https://mgpecasautomotivas.github.io/#/linhas",
+      "chosenIconUrl": "https://mgpecasautomotivas.github.io/icones/icone-192.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://mgpecasautomotivas.github.io/manifest.webmanifest",
+  "fullScopeUrl": "https://mgpecasautomotivas.github.io/",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}
