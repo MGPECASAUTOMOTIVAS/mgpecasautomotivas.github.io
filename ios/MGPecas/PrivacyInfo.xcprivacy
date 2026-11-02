@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Manifesto de privacidade do app: sem rastreamento, sem coleta de dados e sem as APIs de "motivo obrigatório". -->
+<!-- Manifesto de privacidade do app: sem rastreamento e sem as APIs de "motivo obrigatório". Dado coletado: só o
+     histórico de pesquisa (a placa digitada na busca pela placa: o serviço da placa guarda a resposta de cada placa por
+     até 90 dias, sem ligar a ninguém), igual às respostas de App Privacy em lojas/apple/textos.md. Se o serviço deixar
+     de guardar as respostas, tire daqui e do App Store Connect. -->
 <plist version="1.0">
 <dict>
 	<key>NSPrivacyTracking</key>
@@ -8,7 +11,20 @@
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<key>NSPrivacyCollectedDataTypes</key>
-	<array/>
+	<array>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeSearchHistory</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array/>
 </dict>

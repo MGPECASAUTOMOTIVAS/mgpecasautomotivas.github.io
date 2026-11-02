@@ -82,6 +82,9 @@ jobs:
           APP="$PWD/build/Build/Products/Debug-iphonesimulator/MGPecas.app"
           test -d "$APP"
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleDisplayName" -c "Print :WKAppBoundDomains" -c "Print :NSPhotoLibraryAddUsageDescription" "$APP/Info.plist"
+          # manifesto de privacidade dentro do app (sem rastreamento; só "Search History", como no App Privacy)
+          plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          plutil -p "$APP/PrivacyInfo.xcprivacy"
           echo "APP=$APP" >> "$GITHUB_ENV"
 
       - name: Compilar o Release para iPhone (sem assinatura) e conferir que ele não tem o código de teste
@@ -97,6 +100,7 @@ jobs:
           if ! grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/release.log"; then tail -n 120 "$RUNNER_TEMP/release.log"; exit 1; fi
           REL="$PWD/build/Build/Products/Release-iphoneos/MGPecas.app"
           test -d "$REL"
+          plutil -lint "$REL/PrivacyInfo.xcprivacy"
           for t in "localStorage.setItem('mg-tema'" "localStorage.setItem('mg-lista'" "MG-DIAGNOSTICO-ERRO" "getRegistrations"; do
             grep -r -q -F "$t" "$APP" || { echo "::error::Controle falhou: '$t' não foi achado no build Debug."; exit 1; }
             if grep -r -q -F "$t" "$REL"; then echo "::error::O build Release tem código de teste ('$t')."; exit 1; fi
