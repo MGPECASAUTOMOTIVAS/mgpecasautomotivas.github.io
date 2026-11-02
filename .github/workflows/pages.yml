@@ -21,6 +21,8 @@ jobs:
       - uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: Tirar a pasta ios/ (app do iPhone) do site publicado
+        run: rm -rf ios
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
