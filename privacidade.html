@@ -6,9 +6,8 @@
 <title>Política de privacidade · MG Peças Automotivas</title>
 <meta name="description" content="Política de privacidade do app de catálogo da MG Peças Automotivas: o que fica no aparelho e o que é enviado.">
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#0b4ea2" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#141c2b" media="(prefers-color-scheme: dark)">
-<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0b4ea2">
+<meta name="color-scheme" content="only light">
 <link rel="icon" type="image/png" sizes="32x32" href="icones/favicon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icones/apple-touch-icon.png">
 <link rel="canonical" href="https://mgpecasautomotivas.github.io/privacidade.html">
@@ -16,22 +15,26 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap">
 <style>
-  /* mesmas cores do app (app.css); página estática, sem JavaScript além da escolha do tema já guardada pelo app */
+  /* mesmas cores e mesma regra de tema do app (app.css): claro, a não ser que a pessoa tenha escolhido Escuro ou
+     Automático no app; página estática, sem JavaScript além da escolha do tema já guardada pelo app */
   :root {
     --mg: #0b4ea2; --mg-claro: #e3ecf8; --fundo: #f2f5f9; --superficie: #ffffff;
     --texto: #0f1b2d; --texto-2: #4b5768; --borda: #dde4ee; --topo-faixa: #0b4ea2; --logo-chip: transparent;
     --cond: "Barlow Condensed", "Arial Narrow", "Barlow", system-ui, sans-serif;
     --fonte: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    color-scheme: light; color-scheme: only light;
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
+    :root[data-theme="auto"] {
       --mg: #4f93ee; --mg-claro: #15294a; --fundo: #0b1220; --superficie: #141c2b;
       --texto: #e8eef8; --texto-2: #a3aec0; --borda: #243044; --topo-faixa: #141c2b; --logo-chip: #ffffff;
+      color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
     --mg: #4f93ee; --mg-claro: #15294a; --fundo: #0b1220; --superficie: #141c2b;
     --texto: #e8eef8; --texto-2: #a3aec0; --borda: #243044; --topo-faixa: #141c2b; --logo-chip: #ffffff;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
@@ -54,7 +57,15 @@
   .rodape { color: var(--texto-2); font-size: .95rem; margin-top: 20px; }
 </style>
 <script>
-try { var t = localStorage.getItem('mg-tema'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+/* tema escolhido no app (mg-tema: light, dark ou auto); sem escolha, claro */
+(function () { try {
+  var t = localStorage.getItem('mg-tema'); if (t !== 'light' && t !== 'dark' && t !== 'auto') return;
+  document.documentElement.setAttribute('data-theme', t);
+  if (t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#141c2b');
+    document.querySelector('meta[name="color-scheme"]').setAttribute('content', 'dark');
+  }
+} catch (e) {} })();
 </script>
 </head>
 <body>

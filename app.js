@@ -1,7 +1,7 @@
 /* MG Peças Automotivas — app de catálogo (PWA)
    Vanilla JS, sem build. Rotas por hash: #/ #/placa #/busca #/busca?q=MG001 #/veiculo/Marca/Modelo/Ano
    #/linhas #/linha/<id> #/peca/<CÓDIGO> #/minhas #/lista ("Minha lista": códigos MG com quantidade, no aparelho) #/sobre
-   #/instalar (QR code e passo a passo; carrega qr.js só nessa tela)
+   #/instalar (QR code e passo a passo; carrega qr.js só nessa tela; dentro dos apps das lojas vai para o Início, ver APP_LOJA)
    #/etiquetas e #/etiquetas?peca=<CÓDIGO> (etiquetas com QR para a prateleira: folha A4 em modelos Pimaco ou grade simples)
    Dados: indice.json, produtos.json, imagens.json, marcas/<marca>.json (mesmos do buscador do site) + detalhes.json (gerado para o app).
    Configuração: config.js (window.MG_CONFIG), carregado antes deste arquivo e também pelo service worker. */
@@ -38,6 +38,26 @@
   /* sessionStorage: dura só enquanto a aba/app estiver aberto (usado para a placa digitada; nunca vai para o localStorage) */
   function ss(k, v) { try { if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { return null; } }
   function lsJson(k, v) { if (v === undefined) { try { return JSON.parse(ls(k) || 'null'); } catch (e) { return null; } } return ls(k, JSON.stringify(v)); }
+  /* ---------- app das lojas (Google Play e App Store) ----------
+     O mesmo app roda dentro do app da Google Play (Trusted Web Activity) e do app do iPhone (WKWebView). Lá ele já está
+     instalado, então tudo o que é instalar o PWA some: faixa flutuante, cartão "Instale o app" do Início, botão e link do
+     Sobre, folha "Adicionar à Tela de Início" e a tela #/instalar (que manda para o Início). O resto fica igual; no
+     navegador (e no app instalado pelo navegador) nada muda.
+     - Google Play: a 1ª página que o app abre chega com document.referrer "android-app://br.com.mgpecasautomotivas.catalogo/"
+       (em display-mode standalone; na reserva, uma Custom Tab). O referrer só existe nessa 1ª carga, por isso a marca fica
+       guardada na sessão (sessionStorage mg-app-loja), que dura enquanto o app estiver aberto: recarregar, "Atualizar" e o
+       link de uma peça (p/<código>.html grava a mesma marca antes de redirecionar, ver gerar_previas.py).
+     - iPhone: o app nativo define window.MG_APP_LOJA = 'ios' no início de cada documento e põe MGCatalogoApp-iOS no user
+       agent; qualquer um dos dois basta. */
+  var APP_LOJA = (function () {
+    var marca = window.MG_APP_LOJA, ref = '';
+    if (marca === 'ios' || /MGCatalogoApp-iOS/.test(navigator.userAgent || '')) return 'ios';
+    if (marca === 'android') return 'android';
+    try { ref = String(document.referrer || ''); } catch (e) {}
+    if (/^android-app:\/\/br\.com\.mgpecasautomotivas\.catalogo(?=$|[\/?#])/.test(ref)) { ss('mg-app-loja', 'android'); return 'android'; }
+    return ss('mg-app-loja') === 'android' ? 'android' : '';
+  })();
+  if (APP_LOJA) { document.documentElement.classList.add('app-loja'); document.documentElement.setAttribute('data-app-loja', APP_LOJA); }
   function carregar(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + url); return r.json(); }); }
   function plural(n, s, p) { return n + ' ' + (n === 1 ? s : p); }
   function dataBr(d) { return String(d || '').split('-').reverse().join('/'); } /* 2026-11-02 → 02/11/2026 */
@@ -1495,9 +1515,12 @@
 
   /* ---------- topo / navegação ---------- */
   var topo = document.getElementById('topo'), tela = document.getElementById('conteudo');
+  /* tema: o app abre sempre no claro, como o site, qualquer que seja o tema do celular. Escuro só quando a pessoa escolhe
+     (botão da lua no Início ou Sobre › Tema); "Automático" (segue o celular) é uma escolha do Sobre. A escolha fica em
+     mg-tema (light, dark ou auto) e o index.html a aplica antes da 1ª pintura (data-theme no <html>); sem escolha, claro. */
   function temaEscuro() {
     var t = document.documentElement.getAttribute('data-theme');
-    return t === 'dark' || (!t && matchMedia('(prefers-color-scheme: dark)').matches);
+    return t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
   }
   function botaoTema() {
     var atual = temaEscuro() ? 'dark' : 'light';
@@ -1505,14 +1528,15 @@
     b.addEventListener('click', function () { aplicarTema(atual === 'dark' ? 'light' : 'dark'); renderizar(); var nb = topo.querySelector('.btn-icone[title="Tema"]'); if (nb) nb.focus(); });
     return b;
   }
-  /* cor da barra de status/endereço (Android, Chrome): acompanha o tema escolhido, não só o do sistema */
+  /* cor da barra de status/endereço (Android, Chrome) e color-scheme do documento: acompanham o tema que aparece */
   function corDoTema() {
-    var cor = temaEscuro() ? '#141c2b' : '#0b4ea2';
-    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) { m.setAttribute('content', cor); });
+    var escuro = temaEscuro(), cs = document.querySelector('meta[name="color-scheme"]');
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) { m.setAttribute('content', escuro ? '#141c2b' : '#0b4ea2'); });
+    if (cs) cs.setAttribute('content', escuro ? 'dark' : 'only light');
   }
   function aplicarTema(t) {
-    if (t === 'auto' || !t) { document.documentElement.removeAttribute('data-theme'); ls('mg-tema', null); }
-    else { document.documentElement.setAttribute('data-theme', t); ls('mg-tema', t); }
+    if (t === 'light' || t === 'dark' || t === 'auto') { document.documentElement.setAttribute('data-theme', t); ls('mg-tema', t); }
+    else { document.documentElement.removeAttribute('data-theme'); ls('mg-tema', null); } /* sem escolha: claro */
     corDoTema();
   }
   /* só o logo original da MG; no tema escuro ele aparece sobre um chip branco (CSS --logo-chip) */
@@ -1994,7 +2018,8 @@
       btnComp.addEventListener('click', function () { compartilhar('Peças MG para ' + titulo, 'Peças MG para ' + titulo + (motor ? ' ' + motor : ''), urlApp(hashBusca)); });
       cab.appendChild(el('div', { class: 'res-acoes' }, [btnComp]));
       var painel = painelResultados(itens, function (it) {
-        return itemPeca(it.i, '<b>' + esc(marca + ' ' + modelo) + '</b> ' + (it.a[3] ? esc(it.a[3]) + ' · ' : '') + esc(anoTexto(it.a)), it.mc === 1 && (cil || motor) ? 'Confirme o motor' : null, null, { lista: true });
+        /* espaços fixos: "2008 em diante" e "2009 a 2023" não se partem no fim da linha, e o "·" fica com o motor (não abre a linha de baixo) */
+        return itemPeca(it.i, '<b>' + esc(marca + ' ' + modelo) + '</b> ' + (it.a[3] ? esc(it.a[3]) + '\u00a0· ' : '') + esc(anoTexto(it.a)).replace(/ /g, '\u00a0'), it.mc === 1 && (cil || motor) ? 'Confirme o motor' : null, null, { lista: true });
       }, true, linha, undefined, { acao: botaoImprimir('btn-mini', true) });
       res.appendChild(painel);
       /* folha "Peças MG para <veículo> · <linha>": código, nome, linha e aplicação (motor/anos) de todas as peças na ordem da tela
@@ -2418,7 +2443,8 @@
       l.forEach(function (x) { ul.appendChild(itemLista(x, atualizar, remover)); });
       res.appendChild(el('div', { class: 'res-cab' }, [el('h2', { class: 'visualmente-oculto', text: 'Peças da lista' }), cont]));
       var btnEtq = el('a', { class: 'btn btn-neutro btn-etiquetas', href: '#/etiquetas', title: 'Etiquetas com QR code para a prateleira' }, [svg(ICONES.etiqueta), 'Etiquetas']);
-      res.appendChild(el('div', { class: 'cartao lista-acoes' }, [el('div', { class: 'linha-btn' }, [btnZap, btnCopiar, btnComp, botaoImprimir(), CFG.etiquetas ? btnEtq : null]), el('p', { class: 'ajuda', text: 'O texto traz só o código MG, o nome e a quantidade, sem valores. A lista fica guardada só neste aparelho. Imprimir / PDF gera uma folha com a lista.' + (CFG.etiquetas ? ' Etiquetas monta uma folha A4 de etiquetas com QR code para a prateleira.' : '') })]));
+      /* na ajuda, "Imprimir / PDF" (nome do botão) com espaços fixos: não se parte no fim da linha */
+      res.appendChild(el('div', { class: 'cartao lista-acoes' }, [el('div', { class: 'linha-btn' }, [btnZap, btnCopiar, btnComp, botaoImprimir(), CFG.etiquetas ? btnEtq : null]), el('p', { class: 'ajuda', text: 'O texto traz só o código MG, o nome e a quantidade, sem valores. A lista fica guardada só neste aparelho. Imprimir\u00a0/\u00a0PDF gera uma folha com a lista.' + (CFG.etiquetas ? ' Etiquetas monta uma folha A4 de etiquetas com QR code para a prateleira.' : '') })]));
       /* folha "Lista de peças MG": quantidade, código, nome e linha de cada peça; QR do app */
       folhaProvedor = function () {
         var lv = listaValida();
@@ -2522,14 +2548,15 @@
   }
   function telaSobre() {
     setTopo({ titulo: 'Sobre a MG', voltarPara: '#/' }); setAba('');
-    var temaAtual = ls('mg-tema') || 'auto';
+    var temaAtual = document.documentElement.getAttribute('data-theme') || 'light'; /* sem escolha, o app está no claro */
     var seg = el('div', { class: 'segmentos', role: 'group', 'aria-label': 'Tema' }, [['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']].map(function (o) {
       var b = el('button', { type: 'button', class: temaAtual === o[0] ? 'ativo' : '', 'aria-pressed': temaAtual === o[0] ? 'true' : 'false', text: o[1] });
       b.addEventListener('click', function () { aplicarTema(o[0]); rolagemAlvo = window.scrollY; telaSobre(); var nb = tela.querySelector('.segmentos button[aria-pressed="true"]'); if (nb) nb.focus(); toast('Tema ' + o[1].toLowerCase()); });
       return b;
     }));
-    var instalarBtn = el('button', { type: 'button', class: 'btn btn-contorno so-navegador' }, [svg(ICONES.instalar), 'Instalar app no celular']);
-    instalarBtn.addEventListener('click', pedirInstalacao);
+    /* dentro do app das lojas (APP_LOJA) o cartão fica só com o Tema: nada de instalar nem de QR/passo a passo */
+    var instalarBtn = APP_LOJA ? null : el('button', { type: 'button', class: 'btn btn-contorno so-navegador' }, [svg(ICONES.instalar), 'Instalar app no celular']);
+    if (instalarBtn) instalarBtn.addEventListener('click', pedirInstalacao);
     var btnVerificar = el('button', { type: 'button', class: 'btn btn-neutro btn-mini' }, [svg(ICONES.atualizar), 'Procurar atualização']);
     btnVerificar.addEventListener('click', function () {
       btnVerificar.disabled = true; btnVerificar.classList.add('carregando');
@@ -2557,8 +2584,8 @@
       ]),
       el('section', { class: 'cartao' }, [
         el('div', { class: 'linha-opcao' }, [el('span', { class: 'rotulo', style: 'margin:0', text: 'Tema' }), seg]),
-        el('div', { class: 'campo' }, [instalarBtn]),
-        el('div', { class: 'campo' }, [el('a', { class: 'btn btn-neutro', href: '#/instalar' }, [svg(ICONES.qr), 'QR code e passo a passo'])])
+        instalarBtn ? el('div', { class: 'campo' }, [instalarBtn]) : null,
+        APP_LOJA ? null : el('div', { class: 'campo' }, [el('a', { class: 'btn btn-neutro', href: '#/instalar' }, [svg(ICONES.qr), 'QR code e passo a passo'])])
       ]),
       el('section', { class: 'cartao' }, [
         el('div', { class: 'versao' }, [
@@ -2684,7 +2711,7 @@
       case 'minhas': telaMinhas(); break;
       case 'lista': telaLista(); break;
       case 'sobre': telaSobre(); break;
-      case 'instalar': telaInstalar(); break;
+      case 'instalar': if (APP_LOJA) { location.replace('#/'); } else { telaInstalar(); } break; /* app das lojas: já instalado, vai para o Início */
       case 'etiquetas': if (CFG.etiquetas) { telaEtiquetas(r.q); } else { location.replace('#/lista'); } break;
       /* endereço desconhecido (link antigo ou digitado errado): avisa e volta ao Início */
       default: toast('Endereço não encontrado'); location.hash = '#/';
@@ -2692,7 +2719,7 @@
   }
   window.addEventListener('hashchange', renderizar);
   var mqEscuro = matchMedia('(prefers-color-scheme: dark)');
-  function aoMudarTemaSistema() { if (!ls('mg-tema')) { corDoTema(); renderizar(); } }
+  function aoMudarTemaSistema() { if (document.documentElement.getAttribute('data-theme') === 'auto') { corDoTema(); renderizar(); } } /* só com "Automático" */
   if (mqEscuro.addEventListener) mqEscuro.addEventListener('change', aoMudarTemaSistema); else if (mqEscuro.addListener) mqEscuro.addListener(aoMudarTemaSistema); /* Safari até o 13 só tem addListener */
   corDoTema();
 
@@ -2719,8 +2746,9 @@
   var faixa = document.getElementById('faixa-instalar'), folhaIos = document.getElementById('folha-ios');
   function emStandalone() { return matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; }
   function ehIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
-  function podeMostrarFaixa() { var d = +ls('mg-instalar-dispensado') || 0; return !emStandalone() && (Date.now() - d > 7 * 86400000); }
+  function podeMostrarFaixa() { var d = +ls('mg-instalar-dispensado') || 0; return !APP_LOJA && !emStandalone() && (Date.now() - d > 7 * 86400000); }
   function pedirInstalacao() {
+    if (APP_LOJA) return;
     if (promptInstalar) { promptInstalar.prompt(); promptInstalar.userChoice.then(function () { promptInstalar = null; faixa.hidden = true; }); return; }
     if (ehIOS()) { abrirFolha(); return; }
     toast('No menu do navegador, toque em “Instalar app” ou “Adicionar à tela inicial”.');
@@ -2730,7 +2758,7 @@
     return { titulo: 'Instale o app da MG', sub: ehIOS() ? 'Toque em Compartilhar › Adicionar à Tela de Início.' : 'Abre direto da tela inicial, mesmo sem internet.', botao: 'Instalar' };
   }
   function cartaoInstalar() {
-    if (emStandalone()) return null;
+    if (APP_LOJA || emStandalone()) return null;
     var t = textosInstalar(), b = el('button', { type: 'button', class: 'btn btn-primario btn-mini', text: t.botao });
     b.addEventListener('click', pedirInstalacao);
     return el('section', { class: 'cartao instalar-cartao so-navegador' }, [
@@ -2742,11 +2770,13 @@
   }
   (function () { var t = textosInstalar(); faixa.querySelector('.faixa-txt b').textContent = t.titulo; faixa.querySelector('.faixa-txt span').textContent = t.sub; faixa.querySelector('#btn-instalar').textContent = t.botao; })();
   window.addEventListener('beforeinstallprompt', function (e) {
-    e.preventDefault(); promptInstalar = e;
+    e.preventDefault(); /* também segura a mini barra de instalação do próprio Chrome */
+    if (APP_LOJA) return; /* app das lojas: nunca oferece instalar */
+    promptInstalar = e;
     if (podeMostrarFaixa() && avisoAtualizar.hidden) faixa.hidden = false;
     document.dispatchEvent(new CustomEvent('mg-instalavel')); /* a tela Instalar sobe o botão "Instalar agora" */
   });
-  window.addEventListener('appinstalled', function () { faixa.hidden = true; promptInstalar = null; document.querySelectorAll('.cartao-agora').forEach(function (c) { c.remove(); }); toast('App instalado. Abra pela tela inicial.'); });
+  window.addEventListener('appinstalled', function () { if (APP_LOJA) return; faixa.hidden = true; promptInstalar = null; document.querySelectorAll('.cartao-agora').forEach(function (c) { c.remove(); }); toast('App instalado. Abra pela tela inicial.'); });
   document.getElementById('btn-instalar').addEventListener('click', pedirInstalacao);
   document.getElementById('btn-fechar-instalar').addEventListener('click', function () { faixa.hidden = true; ls('mg-instalar-dispensado', String(Date.now())); });
   /* folha do iPhone: foco vai para "Entendi" ao abrir, Esc fecha e o foco volta para quem abriu */
@@ -2756,6 +2786,8 @@
   document.getElementById('btn-fechar-ios').addEventListener('click', fecharFolha);
   folhaIos.addEventListener('click', function (e) { if (e.target === folhaIos) fecharFolha(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !folhaIos.hidden) fecharFolha(); });
+  /* app das lojas: a faixa e a folha do iPhone saem da página (nenhum texto de instalar fica nem escondido) */
+  if (APP_LOJA) { faixa.remove(); folhaIos.remove(); }
   if (ehIOS() && !emStandalone() && podeMostrarFaixa()) {
     var visitas = (+ls('mg-visitas') || 0) + 1; ls('mg-visitas', String(visitas));
     if (visitas >= 2) faixa.hidden = false; /* textos do iPhone já vêm de textosInstalar(); "Instalar" abre a folha com o passo a passo */

@@ -1,5 +1,5 @@
 /* MG Peças Automotivas — app de catálogo (PWA)
-   Identidade: azul MG #0b4ea2, Barlow / Barlow Condensed. Temas claro e escuro. */
+   Identidade: azul MG #0b4ea2, Barlow / Barlow Condensed. Temas claro (o padrão, sempre) e escuro (só por escolha). */
 :root {
   --mg: #0b4ea2;
   --mg-forte: #083d80;
@@ -30,10 +30,15 @@
   --sa-fundo: env(safe-area-inset-bottom, 0px);
   --sa-esq: env(safe-area-inset-left, 0px);
   --sa-dir: env(safe-area-inset-right, 0px);
+  /* o app abre sempre no claro, como o site, qualquer que seja o tema do celular; o escuro é escolha da pessoa (data-theme,
+     ver o index.html). "only" também impede o Chrome de escurecer a página sozinho ("Escurecer sites"); a 1ª linha é para
+     navegador que não conhece o "only" */
   color-scheme: light;
+  color-scheme: only light;
 }
+/* "Automático" (escolha guardada no Sobre, data-theme="auto"): segue o tema do celular */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root[data-theme="auto"] {
     --mg: #4f93ee; --mg-forte: #2a6cc4; --mg-claro: #15294a; --mg-texto-sobre: #ffffff; /* --mg 5,5:1 sobre a superfície escura */
     --btn-fundo: #2a6cc4; --btn-fundo-hover: #1f5aa8; --mg-texto-claro: #8db8ff;
     --esq-a: #1a2436; --esq-b: #243044; --topo-faixa: #141c2b; --logo-chip: #ffffff;
@@ -47,6 +52,7 @@
     color-scheme: dark;
   }
 }
+/* "Escuro": botão da lua no Início ou Sobre › Tema */
 :root[data-theme="dark"] {
   --mg: #4f93ee; --mg-forte: #2a6cc4; --mg-claro: #15294a; --mg-texto-sobre: #ffffff;
   --btn-fundo: #2a6cc4; --btn-fundo-hover: #1f5aa8; --mg-texto-claro: #8db8ff;
@@ -127,7 +133,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .secao-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .secao-cab .link { font: 600 .875rem var(--fonte); text-decoration: none; padding: 14px 0 14px 12px; margin: -14px 0; }
 .rotulo { display: block; font: 600 .75rem/1.2 var(--cond); text-transform: uppercase; letter-spacing: .1em; color: var(--texto-2); margin-bottom: 6px; }
-.ajuda { font-size: .8125rem; color: var(--texto-2); margin: 8px 0 0; }
+.ajuda { font-size: .8125rem; color: var(--texto-2); margin: 8px 0 0; text-wrap: pretty; } /* sem palavra sozinha na última linha ("…antes de / instalar.") */
 .cartao { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); padding: 16px; box-shadow: var(--sombra); }
 .cartao + .cartao { margin-top: 12px; }
 .chamada { font-size: .9375rem; color: var(--texto-2); margin: 6px 0 0; }
@@ -209,6 +215,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .cartao-link-ic svg, .cartao-link-seta svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .cartao-link-txt { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: .875rem; color: var(--texto-2); line-height: 1.3; }
 .cartao-link-txt b { font: 700 .9375rem var(--fonte); color: var(--texto); }
+.cartao-link-txt span { text-wrap: pretty; } /* "Enviar pelo WhatsApp ou / copiar o texto" em 360, sem "texto" sozinho */
 .cartao-link-seta { flex: 0 0 auto; color: var(--texto-3); display: inline-flex; }
 .cartao-link:active { background: var(--superficie-2); }
 .grade-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; } /* minmax(0): os botões "Baixar PNG/SVG" encolhem em vez de rolar a tela com zoom 150% */
@@ -327,8 +334,8 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .item:active { transform: scale(.99); }
 .item-seta { width: 20px; height: 20px; fill: none; stroke: var(--texto-3); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .item-cod { font: 800 1.25rem/1 var(--cond); color: var(--mg); letter-spacing: .02em; }
-.item-nome { font: 600 .9375rem/1.25 var(--fonte); margin-top: 3px; color: var(--texto); }
-.item-apl { font-size: .8125rem; color: var(--texto-2); margin-top: 4px; line-height: 1.3; }
+.item-nome { font: 600 .9375rem/1.25 var(--fonte); margin-top: 3px; color: var(--texto); text-wrap: pretty; } /* sem palavra sozinha na 2ª linha ("…Filtro de / Ar") */
+.item-apl { font-size: .8125rem; color: var(--texto-2); margin-top: 4px; line-height: 1.3; overflow-wrap: anywhere; } /* os anos vêm com espaço fixo; em tela estreitíssima ainda quebram em vez de vazar */
 .item-apl b { color: var(--texto); font-weight: 600; }
 .item .etiqueta { margin-top: 6px; }
 .foto { /* miniatura na proporção real das fotos da loja (20:11): a foto preenche a caixa, sem faixa branca em cima e embaixo */
@@ -384,7 +391,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .linha-foto.icone { background: var(--mg-claro); color: var(--mg-texto-claro); }
 .linha-foto.icone svg { display: block; }
 .linha-txt { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 12px; min-width: 0; }
-.linha-card b { font: 700 1rem/1.15 var(--cond); text-transform: uppercase; letter-spacing: .02em; hyphens: auto; overflow-wrap: anywhere; } /* fonte grande: hifeniza antes de quebrar a palavra */
+.linha-card b { font: 700 1rem/1.15 var(--cond); text-transform: uppercase; letter-spacing: .02em; hyphens: auto; overflow-wrap: anywhere; text-wrap: pretty; } /* fonte grande: hifeniza antes de quebrar a palavra; sem "AR" sozinho na 2ª linha */
 @media (max-width: 299px) { .grade-linhas { grid-template-columns: minmax(0, 1fr); } } /* zoom 150% em celular estreito: uma coluna, sem partir palavras */
 .linha-card small { color: var(--texto-2); font-size: .8125rem; }
 /* fonte grande do sistema (uma coluna, ver a consulta de contêiner acima): o cartão deita, com a foto à esquerda (40%) e
@@ -479,6 +486,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .lista-item .item { border: 0; background: transparent; box-shadow: none; padding: 2px 48px 2px 0; min-height: 57px; border-radius: 8px; }
 .lista-item .item:active { transform: none; }
 .lista-item .item-remover { right: 2px; top: 8px; margin-top: 0; }
+.lista-item .item-apl { text-wrap: pretty; } /* nome da linha sob a peça, com fonte grande: "Mangueiras do Filtro / de Ar" */
 .lista-qtd { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--borda); }
 .qtd-btn { width: 44px; height: 44px; flex: 0 0 auto; border: 1px solid var(--borda); border-radius: 10px; background: var(--superficie-2); color: var(--texto); font: 700 1.375rem/1 var(--cond); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .qtd-btn:active { background: var(--borda); }
@@ -492,6 +500,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .lista-acoes { padding: 12px 14px 14px; }
 .lista-acoes .btn { padding-left: 12px; padding-right: 12px; } /* "Enviar pelo WhatsApp" em uma linha também em 360 */
 .lista-acoes .ajuda { margin-top: 10px; }
+.lista-itens { margin: 12px 0; } /* Minha lista: os cartões das peças não encostam no cartão das ações nem no "Ver o texto da lista" */
 .lista-texto summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font: 600 .875rem var(--fonte); color: var(--mg); margin: -12px 0; }
 .lista-texto[open] summary { margin-bottom: 0; }
 .lista-texto-pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: .875rem/1.5 var(--fonte); color: var(--texto); }
@@ -679,6 +688,9 @@ body:not(.rota-inicio):not(.rota-instalar):has(.faixa-instalar:not([hidden])) .t
 @media (display-mode: standalone) {
   .so-navegador { display: none !important; }
 }
+/* app das lojas (Google Play e App Store, classe .app-loja no <html> posta pelo app.js): nada de instalar; o app.js já não
+   monta esses blocos, esta regra é só a garantia */
+.app-loja .so-navegador, .app-loja .faixa-instalar, .app-loja #folha-ios { display: none !important; }
 
 /* ---------- ficha: ampliar a foto ---------- */
 .detalhe-foto .foto.pode-ampliar.ok { cursor: zoom-in; }

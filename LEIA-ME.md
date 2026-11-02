@@ -14,7 +14,7 @@ aqui), preservando o `#/…` do link.
 index.html                  casca do app
 config.js                   configuração (MG_CONFIG: dadosBase, detalhesUrl, placaUrl, loja, versao) — único lugar a mudar;
                             lido pelo index.html e pelo service worker (importScripts), para o pré-cache usar os mesmos endereços
-app.css                     visual (azul MG #0b4ea2, Barlow / Barlow Condensed, temas claro e escuro, safe-area iPhone)
+app.css                     visual (azul MG #0b4ea2, Barlow / Barlow Condensed, tema claro por padrão e escuro por escolha, safe-area iPhone)
 app.js                      rotas (#/ #/placa #/busca #/veiculo/… #/linhas #/linha/<id> #/peca/<CÓDIGO> #/minhas #/lista #/etiquetas #/sobre), busca, placa, instalação, impressão (folha #impressao montada só ao imprimir, CSS @media print), etiquetas com QR (ETIQUETA_MODELOS: folha A4 em mm)
 sw.js                       service worker: casca + catálogo (inclusive marcas/*.json) em cache; mudar VERSAO a cada publicação
 manifest.webmanifest        nome "MG Peças Automotivas", short_name "MG Peças", standalone, ícones 192/512 + maskable
@@ -141,10 +141,32 @@ https://mgpecasautomotivas.github.io/ em tela cheia. Arquivos no repositório:
   a impressão da chave de assinatura do Google (Play Console → Integridade do app) precisa ser ACRESCENTADA à lista
   `sha256_cert_fingerprints`, mantendo a atual.** O Pages serve a pasta `.well-known` porque o `.nojekyll` existe.
 - `privacidade.html` — política de privacidade exigida pela ficha da loja (https://mgpecasautomotivas.github.io/privacidade.html);
-  estática, nos dois temas, sem contato. Não está linkada no app de propósito (visual aprovado intocado).
+  estática, nos dois temas (a mesma regra do app: claro, a não ser que a pessoa tenha escolhido outro), sem contato. Não está
+  linkada no app de propósito (visual aprovado intocado).
 Fora do repositório, em `site-nuvemshop/app_catalogo/play/`: `chave/` (keystore, base64, senha, sha256 — guardar em lugar
 seguro), `ficha/` (ícone, gráfico de destaque, capturas 1080×1920 e textos.md) e o guia.
 Apple App Store: adiada (US$ 99/ano; empacotar via Capacitor quando for a hora).
+
+### Dentro dos apps das lojas: nada de "instalar"
+O mesmo app roda dentro do app da Google Play (TWA) e do app do iPhone (WKWebView). Lá ele já está instalado, então o
+`app.js` (`APP_LOJA`) tira tudo o que é instalar o PWA: faixa flutuante, cartão "Instale o app" do Início, botão "Instalar
+app no celular" e link "QR code e passo a passo" do Sobre e folha "Adicionar à Tela de Início"; `#/instalar` abre o Início.
+O resto fica igual, e no navegador (ou no app instalado pelo navegador) nada muda.
+- Google Play: a 1ª página aberta pelo app chega com `document.referrer` começando por
+  `android-app://br.com.mgpecasautomotivas.catalogo`. O referrer só existe nessa carga, então a marca fica na sessão
+  (`sessionStorage` `mg-app-loja`). As prévias `p/<código>.html` gravam a mesma marca antes de redirecionar (link de peça
+  aberto pelo app); ao regerar a pasta `p/`, use o `gerar_previas.py` atual.
+- App Store: o app nativo define `window.MG_APP_LOJA = 'ios'` no início do documento (WKUserScript em atDocumentStart) e
+  acrescenta `MGCatalogoApp-iOS` ao user agent; qualquer um dos dois basta.
+- O `<html>` recebe a classe `app-loja` e `data-app-loja="android"` ou `"ios"`; o teste de fumaça simula os dois apps e o navegador.
+
+### Tema: claro por padrão (o Filipe pediu, 02/11/2026)
+O app abre sempre no tema claro, como o site, qualquer que seja o tema do celular. O escuro só aparece quando a pessoa
+escolhe: botão da lua no topo do Início (troca claro/escuro) ou Sobre › Tema (Automático, Claro, Escuro). A escolha fica em
+`localStorage` `mg-tema` (`light`, `dark` ou `auto`; sem a chave, claro) e o script no `<head>` do `index.html` a aplica antes
+da 1ª pintura (`data-theme` no `<html>`, `theme-color` e `color-scheme`). "Automático" segue o celular (`prefers-color-scheme`),
+mas só vale se a pessoa escolher. No CSS, o bloco `@media (prefers-color-scheme: dark)` vale só com `data-theme="auto"`, e o
+claro é `color-scheme: only light` (o Chrome não escurece a página sozinho). A impressão sai sempre em preto no branco.
 
 ## Regras seguidas
 Sem preço, sem palavras de venda, sem e-mail/WhatsApp da MG, sem distribuidores ou clientes. Só dados reais dos arquivos.

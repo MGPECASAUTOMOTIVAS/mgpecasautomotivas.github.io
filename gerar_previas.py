@@ -109,7 +109,11 @@ MODELO = (
     '{imagens}<meta property="og:url" content="{url}">'
     '<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="{img}">'
     '<meta name="twitter:image:alt" content="{alt}">'
-    '<meta http-equiv="refresh" content="0;url={dest}"><script>location.replace("{dest}")</script>'
+    '<meta http-equiv="refresh" content="0;url={dest}">'
+    # aberta pelo app da Google Play (1ª página com referrer android-app://...): a marca fica na sessão antes de ir ao app,
+    # que esconde tudo o que é instalar (app.js, APP_LOJA); no navegador nada muda
+    '<script>try{{/^android-app:\\/\\/br\\.com\\.mgpecasautomotivas\\.catalogo(?=$|[\\/?#])/.test(document.referrer)'
+    '&&sessionStorage.setItem("mg-app-loja","android")}}catch(e){{}}location.replace("{dest}")</script>'
     '</head><body><a href="{dest}">Abrir {cod} no app MG Peças</a></body></html>\n'
 )
 

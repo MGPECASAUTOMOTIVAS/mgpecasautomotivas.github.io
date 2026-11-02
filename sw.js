@@ -10,7 +10,7 @@
    Ao publicar uma versão nova, mude VERSAO. */
 importScripts('config.js');
 var CFG = self.MG_CONFIG || {};
-var VERSAO = '2026.11.02-32';
+var VERSAO = '2026.11.02-33';
 var CACHE_CASCA = 'mg-casca-' + VERSAO;
 var CACHE_DADOS = 'mg-dados-' + VERSAO;
 var CACHE_FOTOS = 'mg-fotos-v1';

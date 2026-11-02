@@ -39,6 +39,14 @@ Guia curto para o Filipe. Tudo o que está aqui foi testado em 02/11/2026.
   folha. Opções: uma etiqueta por peça ou por unidade da lista, pular as já usadas na 1ª folha. Na caixa de impressão escolha
   **100% / tamanho real** (sem "ajustar à página") e papel A4; imprima antes em papel comum e sobreponha à folha adesiva.
   Para mudar um modelo ou acrescentar outro: lista `ETIQUETA_MODELOS` em `app.js` (medidas em mm, com a fonte no comentário).
+- **Dentro dos apps das lojas** (Google Play e, quando sair, App Store): o app já vem instalado, então some tudo o que é
+  "instalar" (faixa flutuante, cartão do Início, botão e QR do Sobre, passo a passo; `#/instalar` abre o Início). O resto é
+  igual, e no navegador nada muda. Como o app reconhece cada loja: LEIA-ME.md, "Dentro dos apps das lojas".
+- **Tema claro por padrão** (o Filipe pediu, 02/11/2026): o app abre sempre no tema claro, como o site, mesmo com o
+  celular no modo escuro. O escuro só aparece quando a pessoa escolhe: botão da lua no topo do Início (troca claro/escuro) ou
+  Sobre › Tema › Escuro; a escolha fica guardada no aparelho (chave `mg-tema`) e vale nas próximas aberturas. "Automático"
+  (segue o tema do celular) continua no Sobre, mas só vale se a pessoa escolher. A folha de impressão sai sempre em preto no
+  branco. Detalhes técnicos: LEIA-ME.md, "Tema: claro por padrão".
 - Endereço no ar: https://mgpecasautomotivas.github.io/
 - Os arquivos ficam em dois lugares:
   - **Repositório** `MGPECASAUTOMOTIVAS/mgpecasautomotivas.github.io` no GitHub (organização da MG) → a raiz dele é o que
@@ -95,8 +103,8 @@ git push origin main
 ## 4. Como mudar a versão
 A versão tem que mudar a cada publicação, senão o celular continua com os arquivos antigos. São dois lugares, com
 o mesmo texto (formato ano.mês.dia-número):
-- `config.js` → linha `versao: '2026.11.02-32'`
-- `sw.js` → linha `var VERSAO = '2026.11.02-32';`
+- `config.js` → linha `versao: '2026.11.02-33'`
+- `sw.js` → linha `var VERSAO = '2026.11.02-33';`
 Se os dois ficarem diferentes, o teste do item 5 acusa.
 
 ## 5. Como rodar o teste
@@ -106,7 +114,7 @@ Precisa do Node.js e do Playwright com o Chromium (uma vez só: `npm install -g 
 node teste/fumaca.js
 ```
 Em uns 25 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, Minha lista, Imprimir / PDF, etiquetas, busca por voz, compartilhar,
-instalar, versão, uso sem internet) e termina com `226/226 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
+instalar, apps das lojas, tema claro por padrão, versão, uso sem internet) e termina com `271/271 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
 Para guardar capturas de tela: `node teste/fumaca.js --capturas pasta_das_capturas`.
 
 ## 6. Onde estão as regras

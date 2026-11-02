@@ -54,6 +54,13 @@ async function ir(page, hash, seletor) {
   await page.evaluate(function (h) { var t = document.getElementById('conteudo'); if (t.firstElementChild) t.firstElementChild.setAttribute('data-velho', '1'); location.hash = h; }, hash);
   return page.waitForSelector('#conteudo > :not([data-velho]) ' + seletor, { timeout: 15000 });
 }
+/* tema: o app abre sempre no claro, qualquer que seja o tema do celular; o escuro é escolha da pessoa, guardada em mg-tema
+   (como o botão da lua e o Sobre gravam). escolherTema grava a escolha (null apaga) e a aplica na hora, como o index.html faz
+   ao abrir; com recarregar, abre a página de novo (a tela inteira, com o botão da lua ou do sol, vem no tema escolhido) */
+async function escolherTema(page, t, recarregar) {
+  await page.evaluate(function (t) { if (t) { localStorage.setItem('mg-tema', t); document.documentElement.setAttribute('data-theme', t); } else { localStorage.removeItem('mg-tema'); document.documentElement.removeAttribute('data-theme'); } }, t || null);
+  if (recarregar) await page.reload();
+}
 function document_tem(html, classe) { return html.indexOf(classe) >= 0; }
 async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(250); /* fim da animação de entrada da tela */ await page.screenshot({ path: path.join(capturas, nome + '.png'), fullPage: false }); } }
 
@@ -73,7 +80,7 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   function temIcone(tam, uso) { return man.icons.some(function (i) { return i.sizes === tam + 'x' + tam && i.purpose === uso && fs.existsSync(path.join(APP, i.src)); }); }
   ok(man.name && man.short_name && man.id && man.start_url && man.scope && man.display === 'standalone' && man.theme_color && man.background_color, 'manifest.webmanifest com name, short_name, id, start_url, scope, display standalone e cores');
   ok(temIcone(192, 'any') && temIcone(512, 'any') && temIcone(192, 'maskable') && temIcone(512, 'maskable'), 'ícones 192/512 any e maskable do manifesto existem em icones/');
-  ok(/rel="apple-touch-icon"[^>]*href="icones\/apple-touch-icon.png"/.test(indexHtml) && fs.existsSync(path.join(APP, 'icones', 'apple-touch-icon.png')) && /apple-mobile-web-app-capable/.test(indexHtml) && /apple-mobile-web-app-title/.test(indexHtml) && (indexHtml.match(/name="theme-color"/g) || []).length === 2, 'apple-touch-icon, metas apple-mobile-web-app-* e theme-color claro/escuro no index.html');
+  ok(/rel="apple-touch-icon"[^>]*href="icones\/apple-touch-icon.png"/.test(indexHtml) && fs.existsSync(path.join(APP, 'icones', 'apple-touch-icon.png')) && /apple-mobile-web-app-capable/.test(indexHtml) && /apple-mobile-web-app-title/.test(indexHtml) && (indexHtml.match(/<meta name="theme-color"/g) || []).length === 1 && /<meta name="theme-color" content="#0b4ea2">/.test(indexHtml) && /<meta name="color-scheme" content="only light">/.test(indexHtml), 'apple-touch-icon, metas apple-mobile-web-app-* e theme-color/color-scheme do tema claro, o padrão (o escuro só por escolha) no index.html');
   /* linha de cada peça nos arquivos pequenos (gerar_detalhes.py): 5º campo de produtos.json = posição em indice.json "linhas" */
   var indiceJson = JSON.parse(fs.readFileSync(path.join(APP, 'dados', 'indice.json'), 'utf8')), produtosJson = JSON.parse(fs.readFileSync(path.join(APP, 'dados', 'produtos.json'), 'utf8'));
   ok(Array.isArray(indiceJson.linhas) && indiceJson.linhas.length === 14, 'indice.json traz a lista "linhas" (14)');
@@ -87,6 +94,11 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
     return !cod || i < 0 || !produtosJson[i][3] || !imagensJson.itens[String(i)] || indiceJson.linhas[produtosJson[i][4]] !== l;
   });
   ok(Object.keys(fotoLinha).length === 14 && !fotoLinhaErros.length, 'FOTO_LINHA: 14 linhas com peça publicada, com foto e da própria linha' + (fotoLinhaErros.length ? ' (erro em ' + fotoLinhaErros.join(', ') + ')' : ''));
+
+  /* prévias p/<código>.html: abertas pelo app da Google Play (referrer android-app://...), gravam a marca da sessão antes de ir à ficha */
+  var previas = fs.readdirSync(path.join(APP, 'p')).filter(function (n) { return /\.html$/.test(n); });
+  var semMarca = previas.filter(function (n) { var h = fs.readFileSync(path.join(APP, 'p', n), 'utf8'); return h.indexOf('/^android-app:\\/\\/br\\.com\\.mgpecasautomotivas\\.catalogo(?=$|[\\/?#])/.test(document.referrer)&&sessionStorage.setItem("mg-app-loja","android")') < 0 || h.indexOf('location.replace("../#/peca/') < 0; });
+  ok(previas.length === 2262 && !semMarca.length, 'prévias p/: as ' + previas.length + ' páginas guardam a marca do app da Google Play na sessão antes de abrir a ficha' + (semMarca.length ? ' (faltam ' + semMarca.slice(0, 5).join(', ') + ')' : ''));
 
   var browser = await chromium.launch();
   /* ---------- fluxos de tela (sem service worker, para as fotos virem das rotas locais) ---------- */
@@ -134,9 +146,9 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   ok(semRolar[2] === 0 && semRolar[0] <= semRolar[1], 'em 390x844 o campo, o cartão do veículo e a 1ª fileira das linhas aparecem sem rolar (cartão até y=' + semRolar[0] + ', abas em y=' + semRolar[1] + ')');
   ok(fotosInicio.every(function (f) { return f.lazy === 'lazy' && f.alt === '' && f.abaixo && f.largura > 120 && Math.abs(f.altura - f.largura * 11 / 20) <= 2 && f.cartao >= 44; }), 'fotos preguiçosas e decorativas (alt vazio: o nome do link é o da linha), caixa 20:11 e nome abaixo (' + fotosInicio[0].largura + '×' + fotosInicio[0].altura + ', cartão ' + fotosInicio[0].cartao + ' px)');
   var brancoFoto = await page.evaluate(function () { return getComputedStyle(document.querySelector('.grade-linhas .linha-foto.ok')).backgroundColor; });
-  await page.emulateMedia({ colorScheme: 'dark' });
+  await escolherTema(page, 'dark');
   var brancoFotoEscuro = await page.evaluate(function () { return getComputedStyle(document.querySelector('.grade-linhas .linha-foto.ok')).backgroundColor; });
-  await page.emulateMedia({ colorScheme: 'light' });
+  await escolherTema(page, null);
   ok(brancoFoto === 'rgb(255, 255, 255)' && brancoFotoEscuro === 'rgb(255, 255, 255)', 'caixa da foto branca nos dois temas (a peça lê bem no escuro)');
   /* sem as fotos (CDN fora do ar ou offline): os cartões voltam ao ícone da linha, sem esqueleto preso */
   var ctxSemFoto = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', locale: 'pt-BR' });
@@ -149,7 +161,11 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await ctxSemFoto.close();
   ok(await page.$('.aba[data-aba="inicio"][aria-selected="true"]'), 'aba Início selecionada');
   await capturar(page, '01-inicio-claro');
-  await page.emulateMedia({ colorScheme: 'dark' }); await capturar(page, '02-inicio-escuro'); await page.emulateMedia({ colorScheme: 'light' });
+  await escolherTema(page, 'dark', true); await page.waitForSelector('.secao-busca .entrada');
+  await page.waitForFunction(function () { return document.querySelectorAll('.grade-linhas .linha-foto.ok img').length === 6; }, null, { timeout: 10000 }).catch(function () {});
+  ok(await page.evaluate(function () { return document.documentElement.getAttribute('data-theme') === 'dark' && getComputedStyle(document.body).backgroundColor === 'rgb(11, 18, 32)'; }), 'Início no escuro com a escolha guardada (mg-tema=dark) depois de recarregar');
+  await capturar(page, '02-inicio-escuro');
+  await escolherTema(page, null, true); await page.waitForSelector('.secao-busca .entrada');
   /* × do campo: só o do app (o nativo do type=search fica escondido); no Início aparece ao digitar e limpa sem sair da tela */
   var xInicio = await page.evaluate(function () { var i = document.querySelector('.secao-busca .entrada'); return { nativo: getComputedStyle(i, '::-webkit-search-cancel-button').webkitAppearance, limparVazio: document.querySelector('.secao-busca .limpar').hidden }; });
   await page.fill('.secao-busca .entrada', 'mg0');
@@ -263,6 +279,9 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   var nApi = await page.evaluate(function () { return MG_APP.buscarVeiculo({ marca: 'Volkswagen', modelo: 'Gol', ano: 2010, motor: '1.6' }).then(function (l) { return l.length; }); });
   igual(nApi, 96, 'MG_APP.buscarVeiculo devolve os mesmos 96');
   ok(await page.$('#conteudo .filtro-veic .chip.ativo'), 'chips de ano/motor com o ativo marcado');
+  /* polimento do ciclo 31: "2008 em diante" / "2009 a 2023" inteiros na mesma linha e o "·" junto do motor (espaços fixos no texto) */
+  var aplsGol = await page.$$eval('#conteudo .painel-res .item-apl', function (es) { return es.slice(0, 12).map(function (e) { return e.textContent; }); });
+  ok(aplsGol.length >= 10 && aplsGol.every(function (t) { var anos = /((\d{4}|todos)[\s\S]*)$/.exec(t.replace(/^.*·\s/, '')); return !/ ·/.test(t) && (!anos || !/ /.test(anos[1])); }), 'resultados do veículo: anos com espaço fixo e "·" preso ao motor (' + JSON.stringify(aplsGol[0]) + ')');
   ok(await page.$('#conteudo .filtro-linhas'), 'filtro por linha nos resultados');
   await capturar(page, '03-gol-2010');
   await ir(page, '#/veiculo/MarcaInexistente/Modelo/2010', '.vazio');
@@ -353,6 +372,8 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   /* tela da lista: cartões, totais, quantidade (−, número editável, +), texto exato, WhatsApp e copiar */
   await ir(page, '#/lista', '.lista-item');
   igual((await page.$$('#conteudo .lista-item')).length, 2, 'lista com 2 peças');
+  var vaos = await page.evaluate(function () { function r(s) { return document.querySelector('#conteudo ' + s).getBoundingClientRect(); } var a = r('.lista-acoes'), u = r('.lista-itens'), t = r('.lista-texto'); return [Math.round(u.top - a.bottom), Math.round(t.top - u.bottom)]; });
+  ok(vaos[0] >= 10 && vaos[0] <= 16 && vaos[1] >= 10 && vaos[1] <= 16, 'Minha lista: 12 px entre o cartão das ações, as peças e "Ver o texto da lista" (' + vaos.join('/') + ' px)');
   igual(await page.textContent('#conteudo .lista-cont'), '2 peças · 3 unidades neste aparelho', 'total de peças e unidades');
   /* a lista é refeita quando detalhes.json chega; espera os controles do 1º cartão medirem 44 px (um cartão recém-trocado mede 0) */
   await page.waitForFunction(function () { var li = document.querySelector('#conteudo .lista-item'); return li && Array.prototype.every.call(li.querySelectorAll('.qtd-btn, .qtd-num, .item-remover'), function (e) { var x = e.getBoundingClientRect(); return x.width >= 44 && x.height >= 44; }); }, null, { timeout: 5000 }).catch(function () {});
@@ -452,13 +473,13 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await page.evaluate(function () { window.dispatchEvent(new Event('afterprint')); });
   ok(await page.evaluate(function () { return !document.getElementById('impressao') && !document.body.classList.contains('imprimindo') && document.title === 'Minha lista · MG Peças'; }), 'afterprint tira a folha e a classe e devolve o título da tela');
   /* tema escuro: a folha sai igual (mesmo HTML, mesmas cores na impressão) */
-  await page.emulateMedia({ colorScheme: 'dark' });
+  await escolherTema(page, 'dark');
   await ir(page, '#/', '.secao-busca .entrada'); await ir(page, '#/lista', '.lista-acoes .btn-imprimir');
   await page.click('#conteudo .lista-acoes .btn-imprimir');
   var folhaE = await lerFolha();
   await page.emulateMedia({ media: 'print' }); var impE = await lerImpressao(); await page.emulateMedia({ media: 'screen' });
   ok(folhaE && folhaE.html === folhaL.html && impE.cor === impL.cor && impE.fundo === impL.fundo && impE.body === impL.body, 'tema escuro: a folha tem o mesmo HTML e sai em preto no branco do mesmo jeito');
-  await page.emulateMedia({ colorScheme: 'light' });
+  await escolherTema(page, null);
   /* trocar de tela tira a folha (se a caixa de impressão não avisou afterprint) */
   await ir(page, '#/peca/MG001', '.acoes-peca .btn-imprimir');
   ok(await page.evaluate(function () { return !document.getElementById('impressao') && !document.body.classList.contains('imprimindo'); }), 'trocar de tela tira a folha pendente');
@@ -740,7 +761,7 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   var btnV844 = await p360.evaluate(function () { var b = document.querySelector('#conteudo .res-barra .btn-imprimir'); return [getComputedStyle(b.querySelector('.btn-imprimir-txt')).display, Math.round(b.getBoundingClientRect().height), b.textContent.trim()]; });
   ok(btnV844[0] !== 'none' && btnV844[1] >= 44 && btnV844[2] === 'Imprimir / PDF', 'a partir de 560 px o botão do veículo mostra "Imprimir / PDF" por extenso (' + btnV844.join(' / ') + ')');
   await ir(p360, '#/peca/MG001', 'table.tabela');
-  await p360.emulateMedia({ colorScheme: 'dark' }); await capturar(p360, '09-paisagem-ficha-escuro'); await p360.emulateMedia({ colorScheme: 'light' });
+  await escolherTema(p360, 'dark'); await capturar(p360, '09-paisagem-ficha-escuro'); await escolherTema(p360, null);
   await p360.setViewportSize({ width: 390, height: 844 });
   await ir(p360, '#/peca/MG046', 'table.tabela');
   var emPe = await p360.evaluate(function () { var f = document.querySelector('#conteudo .detalhe-foto').getBoundingClientRect(), c = document.querySelector('#conteudo .detalhe-cod').getBoundingClientRect(); return [Math.round(f.bottom), Math.round(c.top)]; });
@@ -850,12 +871,12 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   var trocou = await pv.evaluate(function () { return { hash: location.hash, toast: document.getElementById('toast').hidden }; });
   ok(trocou.hash === '#/linhas' && trocou.toast, 'trocar de tela enquanto ouve cancela sem toast; resultado atrasado não abre busca (' + trocou.hash + ')');
   /* escuro, 360, paisagem e computador com teclado */
-  await pv.emulateMedia({ colorScheme: 'dark' });
+  await escolherTema(pv, 'dark');
   await ir(pv, '#/', '.secao-busca .btn-voz'); await pv.click('.secao-busca .btn-voz');
   var corEscuro = await pv.evaluate(function () { var b = document.querySelector('#conteudo .btn-voz'); return [getComputedStyle(b).color, getComputedStyle(document.querySelector('#conteudo .entrada')).borderColor, !!document.querySelector('#conteudo .busca-linha.ouvindo')]; });
   ok(corEscuro[2] && corEscuro[0] === corEscuro[1] && corEscuro[0] === 'rgb(79, 147, 238)', 'escuro: microfone e borda do campo na cor da MG enquanto ouve (' + corEscuro[0] + ')');
   await capturar(pv, '16-voz-ouvindo-escuro');
-  await pv.click('.secao-busca .btn-voz'); await pv.waitForTimeout(100); await pv.emulateMedia({ colorScheme: 'light' });
+  await pv.click('.secao-busca .btn-voz'); await pv.waitForTimeout(100); await escolherTema(pv, null);
   await pv.setViewportSize({ width: 360, height: 740 }); await ir(pv, '#/busca', '.btn-voz'); await ir(pv, '#/', '.secao-busca .btn-voz');
   var m360 = await medirLinha(pv), ph360 = await pv.evaluate(function () { var i = document.querySelector('#conteudo .entrada'), c = document.createElement('canvas').getContext('2d'); c.font = getComputedStyle(i, '::placeholder').font; return Math.round(c.measureText(i.placeholder).width); });
   ok(m360.linha === 56 && m360.voz[0] === 44 && m360.btn[0] >= 44 && m360.largura === '360/360' && m360.util >= ph360, '360: linha 56 px, microfone 44 px, botão de busca ≥ 44 px, sem rolagem horizontal e placeholder inteiro (' + ph360 + ' ≤ ' + m360.util + ' px)');
@@ -891,6 +912,190 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   ok(!(await pi.$('#conteudo .btn-voz')), 'iPhone: também sem microfone na tela Busca');
   await ctxIos.close();
   ok(!errosVoz.length, 'sem erros de console na busca por voz' + (errosVoz.length ? ':\n    ' + errosVoz.join('\n    ') : ''));
+
+  /* ---------- app das lojas: Google Play (Trusted Web Activity) e App Store (WKWebView) ----------
+     A marca entra antes de a página carregar (addInitScript). Android: document.referrer "android-app://br.com.mgpecasautomotivas.catalogo/"
+     só na 1ª carga da sessão (o Chromium do teste descarta esse referrer no goto) e display-mode standalone no matchMedia;
+     iPhone: window.MG_APP_LOJA = 'ios' e MGCatalogoApp-iOS no user agent. Lá tudo o que é instalar some; no navegador nada muda. */
+  console.log('\nApp das lojas (Google Play e App Store)');
+  var UA_ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
+  var UA_SAFARI = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+  var UA_APP_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MGCatalogoApp-iOS';
+  var REF_PLAY = 'android-app://br.com.mgpecasautomotivas.catalogo/';
+  var errosLoja = [];
+  function marcaAndroid(o) {
+    try { if (!sessionStorage.getItem('teste-ref-usado')) { sessionStorage.setItem('teste-ref-usado', '1'); Object.defineProperty(Document.prototype, 'referrer', { configurable: true, get: function () { return o.ref; } }); } } catch (e) {}
+    if (o.standalone) { var mm = window.matchMedia.bind(window); window.matchMedia = function (q) { return /display-mode:\s*standalone/.test(q) ? mm('(min-width: 0px)') : mm(q); }; }
+  }
+  /* estado da página: marca, sessão, blocos do Início, faixa/folha e o 1º texto de instalar que aparecer no HTML do body */
+  function lerLoja() {
+    var ini = document.querySelector('#conteudo .inicio'), faixa = document.getElementById('faixa-instalar');
+    return { classe: document.documentElement.classList.contains('app-loja'), loja: document.documentElement.getAttribute('data-app-loja'), sessao: sessionStorage.getItem('mg-app-loja'), referrer: document.referrer,
+      cartao: !!document.querySelector('#conteudo .instalar-cartao'), faixaDom: !!faixa, folhaDom: !!document.getElementById('folha-ios'), faixaVisivel: !!faixa && !faixa.hidden && getComputedStyle(faixa).display !== 'none',
+      blocos: ini ? Array.prototype.map.call(ini.children, function (e) { return e.className; }) : null, abas: Array.prototype.map.call(document.querySelectorAll('.aba'), function (a) { return a.textContent; }).join(','),
+      textoInstalar: (document.body.innerHTML.match(/Instale o app|Instalar app|Instalar agora|QR code e (instruções|passo a passo)|Adicionar à Tela de Início|tela inicial|faixa-instalar|folha-ios/i) || [''])[0] };
+  }
+  function avisarInstalavel() { var ev = new Event('beforeinstallprompt', { cancelable: true }); ev.prompt = function () {}; ev.userChoice = Promise.resolve({ outcome: 'dismissed' }); window.dispatchEvent(ev); return ev.defaultPrevented; }
+  async function sobre(p) { await ir(p, '#/sobre', '.versao b'); return p.evaluate(function () { var c = document.querySelectorAll('#conteudo .cartao'); return { cartoes: c.length, terceiro: c[2] ? Array.prototype.map.call(c[2].children, function (e) { return e.className; }).join(' | ') : '', links: document.querySelectorAll('#conteudo a[href="#/instalar"]').length, botao: /Instalar app no celular/.test(document.getElementById('conteudo').textContent) }; }); }
+  async function instalarVaiParaInicio(p) { await p.evaluate(function () { var t = document.getElementById('conteudo'); if (t.firstElementChild) t.firstElementChild.setAttribute('data-velho', '1'); location.hash = '#/instalar'; }); await p.waitForSelector('#conteudo > :not([data-velho]) .secao-busca .entrada', { timeout: 10000 }); return p.evaluate(function () { return location.hash; }); }
+  /* navegador (controle): Chrome do Android aberto a partir de outro app (Gmail) e Safari do iPhone; o que existe hoje fica */
+  var ctxNav = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', locale: 'pt-BR', userAgent: UA_ANDROID });
+  await rotas(ctxNav); await ctxNav.addInitScript(marcaAndroid, { ref: 'android-app://com.google.android.gm/', standalone: false });
+  var pn = await ctxNav.newPage(); colher(pn, errosLoja);
+  await pn.goto(base + '#/'); await pn.waitForSelector('.secao-busca .entrada');
+  var nav = await pn.evaluate(lerLoja);
+  ok(!nav.classe && nav.loja === null && nav.sessao === null && nav.cartao && nav.faixaDom && nav.folhaDom, 'navegador (Chrome do Android, vindo de outro app): sem marca de loja, cartão "Instale o app" no Início, faixa e folha na página');
+  ok(await pn.evaluate(avisarInstalavel) && (await pn.evaluate(lerLoja)).faixaDom, 'navegador: o aviso de instalação do Chrome fica guardado para o botão Instalar');
+  await ir(pn, '#/busca', '.entrada');
+  ok((await pn.evaluate(lerLoja)).faixaVisivel, 'navegador: faixa flutuante "Instale o app" aparece fora do Início');
+  var sobreNav = await sobre(pn);
+  ok(sobreNav.botao && sobreNav.links === 1, 'navegador: Sobre com "Instalar app no celular" e "QR code e passo a passo"');
+  await ir(pn, '#/instalar', '.qr-caixa');
+  igual(await pn.evaluate(function () { return location.hash; }), '#/instalar', 'navegador: a tela Instalar continua abrindo');
+  await ir(pn, '#/', '.secao-busca .entrada'); var blocosNav = (await pn.evaluate(lerLoja)).blocos, abasNav = (await pn.evaluate(lerLoja)).abas;
+  await ctxNav.close();
+  var ctxSaf = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', locale: 'pt-BR', userAgent: UA_SAFARI });
+  await rotas(ctxSaf); await ctxSaf.addInitScript(function () { try { if (!localStorage.getItem('mg-visitas')) localStorage.setItem('mg-visitas', '1'); } catch (e) {} });
+  var psf = await ctxSaf.newPage(); colher(psf, errosLoja);
+  await psf.goto(base + '#/busca'); await psf.waitForSelector('#conteudo .entrada');
+  var saf = await psf.evaluate(lerLoja);
+  ok(!saf.classe && saf.faixaVisivel, 'navegador (Safari do iPhone, 2ª visita): faixa "Instale o app" como hoje');
+  await ir(psf, '#/', '.secao-busca .entrada');
+  ok(/Adicionar à Tela de Início/.test(await psf.textContent('#conteudo .instalar-cartao')), 'navegador (Safari do iPhone): cartão do Início com "Compartilhar › Adicionar à Tela de Início"');
+  await ctxSaf.close();
+
+  /* app da Google Play: TWA (standalone) e reserva em Custom Tab (sem standalone) */
+  var ctxAnd = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', locale: 'pt-BR', userAgent: UA_ANDROID });
+  await rotas(ctxAnd); await ctxAnd.addInitScript(marcaAndroid, { ref: REF_PLAY, standalone: true });
+  var pa = await ctxAnd.newPage(); colher(pa, errosLoja);
+  await pa.goto(base + '#/'); await pa.waitForSelector('.secao-busca .entrada');
+  var and1 = await pa.evaluate(lerLoja);
+  ok(and1.classe && and1.loja === 'android' && and1.sessao === 'android' && and1.referrer === REF_PLAY, 'Google Play: 1ª carga com referrer android-app://br.com.mgpecasautomotivas.catalogo/ marca o app (classe app-loja, sessão)');
+  ok(!and1.cartao && !and1.faixaDom && !and1.folhaDom && !and1.textoInstalar, 'Google Play: Início sem cartão "Instale o app", sem faixa e sem folha na página' + (and1.textoInstalar ? ' (achou "' + and1.textoInstalar + '")' : ''));
+  igual(JSON.stringify(and1.blocos), JSON.stringify(blocosNav.filter(function (c) { return c.indexOf('instalar-cartao') < 0; })), 'Google Play: o Início tem os mesmos blocos do navegador, menos o cartão de instalar');
+  ok(and1.abas === abasNav, 'Google Play: mesmas abas do navegador (' + and1.abas + ')');
+  var preveniu = await pa.evaluate(avisarInstalavel);
+  await ir(pa, '#/busca', '.entrada');
+  var and2 = await pa.evaluate(lerLoja);
+  ok(preveniu && !and2.faixaDom && !and2.faixaVisivel && !and2.textoInstalar, 'Google Play: aviso de instalação do Chrome ignorado (sem mini barra nem faixa) na Busca');
+  igual(await instalarVaiParaInicio(pa), '#/', 'Google Play: #/instalar vai para o Início');
+  var sobreAnd = await sobre(pa);
+  ok(!sobreAnd.botao && !sobreAnd.links && sobreAnd.cartoes === sobreNav.cartoes && sobreAnd.terceiro === 'linha-opcao', 'Google Play: Sobre sem instalar nem QR/passo a passo, com os mesmos cartões e o Tema (' + sobreAnd.terceiro + ')');
+  ok(!(await pa.evaluate(lerLoja)).textoInstalar, 'Google Play: nenhum texto de instalar no Sobre');
+  await ir(pa, '#/peca/MG001', 'table.tabela'); await ir(pa, '#/lista', '.vazio');
+  ok(!(await pa.evaluate(lerLoja)).textoInstalar, 'Google Play: ficha e Minha lista sem texto de instalar');
+  await pa.reload(); await pa.waitForSelector('#conteudo .vazio');
+  var and3 = await pa.evaluate(lerLoja);
+  ok(and3.referrer !== REF_PLAY && and3.classe && and3.loja === 'android', 'Google Play: sem o referrer (recarga na mesma sessão) o app continua marcado');
+  await ctxAnd.close();
+  var ctxCt = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', locale: 'pt-BR', userAgent: UA_ANDROID });
+  await rotas(ctxCt); await ctxCt.addInitScript(marcaAndroid, { ref: REF_PLAY, standalone: false });
+  var pct = await ctxCt.newPage(); colher(pct, errosLoja);
+  await pct.goto(base + 'p/MG001.html', { waitUntil: 'commit' }); await pct.waitForURL(/#\/peca\/MG001$/, { timeout: 10000 }); await pct.waitForSelector('#conteudo table.tabela');
+  var ct = await pct.evaluate(lerLoja);
+  ok(ct.loja === 'android' && /\/p\/MG001\.html$/.test(ct.referrer) && !ct.faixaDom && !ct.textoInstalar, 'Google Play: link de peça p/MG001.html aberto pelo app leva a marca para a ficha (também na reserva em Custom Tab)');
+  await ir(pct, '#/', '.secao-busca .entrada');
+  ok(!(await pct.evaluate(lerLoja)).cartao, 'Google Play (Custom Tab, sem standalone): Início sem o cartão de instalar');
+  await ctxCt.close();
+
+  /* app da App Store (WKWebView): marca na janela e no user agent; 3ª visita, quando o Safari já mostraria a faixa */
+  var ctxIosApp = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', locale: 'pt-BR', userAgent: UA_APP_IOS });
+  await rotas(ctxIosApp); await ctxIosApp.addInitScript(function () { window.MG_APP_LOJA = 'ios'; try { localStorage.setItem('mg-visitas', '2'); } catch (e) {} });
+  var pio = await ctxIosApp.newPage(); colher(pio, errosLoja);
+  await pio.goto(base + '#/'); await pio.waitForSelector('.secao-busca .entrada');
+  var ios1 = await pio.evaluate(lerLoja);
+  ok(ios1.classe && ios1.loja === 'ios' && !ios1.cartao && !ios1.faixaDom && !ios1.folhaDom && !ios1.textoInstalar, 'App Store: marca ios, Início sem cartão, sem faixa e sem a folha "Adicionar à Tela de Início"');
+  igual(JSON.stringify(ios1.blocos), JSON.stringify(blocosNav.filter(function (c) { return c.indexOf('instalar-cartao') < 0; })), 'App Store: o Início tem os mesmos blocos do navegador, menos o cartão de instalar');
+  await ir(pio, '#/busca', '.entrada');
+  ok(!(await pio.evaluate(lerLoja)).faixaVisivel, 'App Store: sem faixa flutuante na Busca');
+  igual(await instalarVaiParaInicio(pio), '#/', 'App Store: #/instalar vai para o Início');
+  var sobreIos = await sobre(pio);
+  ok(!sobreIos.botao && !sobreIos.links && sobreIos.terceiro === 'linha-opcao' && !(await pio.evaluate(lerLoja)).textoInstalar, 'App Store: Sobre sem instalar nem QR/passo a passo');
+  ok(!(await pio.$('#conteudo .btn-voz')), 'App Store: busca por voz escondida como no iPhone');
+  await ctxIosApp.close();
+  var ctxIosUa = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', locale: 'pt-BR', userAgent: UA_APP_IOS });
+  await rotas(ctxIosUa); var piu = await ctxIosUa.newPage(); colher(piu, errosLoja);
+  await piu.goto(base + '#/'); await piu.waitForSelector('.secao-busca .entrada');
+  var iosUa = await piu.evaluate(lerLoja);
+  await ctxIosUa.close();
+  var ctxIosMarca = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', locale: 'pt-BR', userAgent: UA_SAFARI });
+  await rotas(ctxIosMarca); await ctxIosMarca.addInitScript(function () { window.MG_APP_LOJA = 'ios'; });
+  var pim = await ctxIosMarca.newPage(); colher(pim, errosLoja);
+  await pim.goto(base + '#/'); await pim.waitForSelector('.secao-busca .entrada');
+  var iosMarca = await pim.evaluate(lerLoja);
+  await ctxIosMarca.close();
+  ok(iosUa.loja === 'ios' && !iosUa.cartao && iosMarca.loja === 'ios' && !iosMarca.cartao, 'App Store: basta o MGCatalogoApp-iOS no user agent ou o window.MG_APP_LOJA');
+  ok(!errosLoja.length, 'sem erros de console no navegador e nos apps das lojas' + (errosLoja.length ? ':\n    ' + errosLoja.join('\n    ') : ''));
+
+  /* ---------- tema: o app abre sempre no claro (como o site), qualquer que seja o tema do celular ----------
+     Celular no escuro (colorScheme dark no contexto): sem escolha, claro; o botão da lua escolhe o escuro e a escolha volta
+     depois de recarregar; Claro fica claro; "Automático" (só como escolha do Sobre) segue o celular. A cor da barra
+     (theme-color) e o color-scheme acompanham o tema que aparece, desde a 1ª pintura (script do index.html, antes do app.js). */
+  console.log('\nTema (claro por padrão)');
+  var CLARO = 'rgb(242, 245, 249)', ESCURO = 'rgb(11, 18, 32)', errosTema = [];
+  function lerTema() {
+    var bt = document.querySelector('.topo .btn-icone[title="Tema"]'), seg = document.querySelector('#conteudo .segmentos [aria-pressed="true"]');
+    return { sistema: matchMedia('(prefers-color-scheme: dark)').matches, tema: document.documentElement.getAttribute('data-theme'), salvo: localStorage.getItem('mg-tema'),
+      fundo: getComputedStyle(document.body).backgroundColor, esquema: getComputedStyle(document.documentElement).colorScheme,
+      barra: document.querySelector('meta[name="theme-color"]').getAttribute('content'), metaEsquema: document.querySelector('meta[name="color-scheme"]').getAttribute('content'),
+      botao: bt ? bt.getAttribute('aria-label') : null, marcado: seg ? seg.textContent : null };
+  }
+  var ctxTema = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', locale: 'pt-BR', colorScheme: 'dark' });
+  await rotas(ctxTema);
+  var pt = await ctxTema.newPage(); colher(pt, errosTema);
+  /* 1ª pintura: com o app.js bloqueado, só o index.html (CSS e o script do tema) decide */
+  await pt.route(/\/app\.js$/, function (r) { return r.abort(); });
+  await pt.goto(base + '#/');
+  var p0 = await pt.evaluate(lerTema);
+  ok(p0.sistema && !p0.tema && p0.fundo === CLARO && p0.barra === '#0b4ea2' && p0.metaEsquema === 'only light' && /light/.test(p0.esquema), '1ª pintura com o celular no escuro e nenhuma escolha: claro e barra #0b4ea2, antes do app.js (' + p0.esquema + ')');
+  await pt.evaluate(function () { localStorage.setItem('mg-tema', 'dark'); }); await pt.reload();
+  var p1 = await pt.evaluate(lerTema);
+  ok(p1.tema === 'dark' && p1.fundo === ESCURO && p1.barra === '#141c2b' && p1.metaEsquema === 'dark' && p1.esquema === 'dark', '1ª pintura com a escolha Escuro: escuro e barra #141c2b já antes do app.js');
+  await pt.evaluate(function () { localStorage.setItem('mg-tema', 'qualquer'); }); await pt.reload();
+  var p2 = await pt.evaluate(lerTema);
+  ok(!p2.tema && p2.fundo === CLARO && p2.barra === '#0b4ea2', 'valor estranho em mg-tema é ignorado: claro');
+  await pt.evaluate(function () { localStorage.removeItem('mg-tema'); });
+  await pt.unroute(/\/app\.js$/);
+  /* app inteiro */
+  await pt.reload(); await pt.waitForSelector('.secao-busca .entrada');
+  var t1 = await pt.evaluate(lerTema);
+  ok(t1.sistema && !t1.tema && !t1.salvo && t1.fundo === CLARO && t1.barra === '#0b4ea2' && t1.metaEsquema === 'only light' && t1.botao === 'Usar tema escuro', 'celular no escuro e nenhuma escolha: o app abre no claro, com a lua no topo e a barra #0b4ea2');
+  await ir(pt, '#/sobre', '.segmentos');
+  igual((await pt.evaluate(lerTema)).marcado, 'Claro', 'Sobre › Tema: sem escolha, "Claro" marcado');
+  await ir(pt, '#/', '.secao-busca .entrada');
+  await pt.click('.topo .btn-icone[title="Tema"]'); await pt.waitForSelector('#conteudo .secao-busca .entrada');
+  var t2 = await pt.evaluate(lerTema);
+  ok(t2.tema === 'dark' && t2.salvo === 'dark' && t2.fundo === ESCURO && t2.barra === '#141c2b' && t2.botao === 'Usar tema claro', 'botão da lua: escuro na hora, escolha guardada (mg-tema=dark) e barra #141c2b');
+  await pt.reload(); await pt.waitForSelector('.secao-busca .entrada');
+  var t3 = await pt.evaluate(lerTema);
+  ok(t3.tema === 'dark' && t3.fundo === ESCURO && t3.barra === '#141c2b' && t3.esquema === 'dark' && t3.botao === 'Usar tema claro', 'escolha Escuro: continua escuro depois de recarregar');
+  await ir(pt, '#/sobre', '.segmentos');
+  igual((await pt.evaluate(lerTema)).marcado, 'Escuro', 'Sobre › Tema: "Escuro" marcado');
+  await ir(pt, '#/', '.secao-busca .entrada');
+  await pt.click('.topo .btn-icone[title="Tema"]'); await pt.waitForSelector('#conteudo .secao-busca .entrada');
+  await pt.reload(); await pt.waitForSelector('.secao-busca .entrada');
+  var t4 = await pt.evaluate(lerTema);
+  ok(t4.tema === 'light' && t4.salvo === 'light' && t4.fundo === CLARO && t4.barra === '#0b4ea2' && t4.botao === 'Usar tema escuro', 'escolha Claro (botão do sol): claro, também depois de recarregar com o celular no escuro');
+  /* "Automático": escolha do Sobre, guardada; segue o celular, também quando ele troca com o app aberto */
+  await ir(pt, '#/sobre', '.segmentos');
+  await pt.click('#conteudo .segmentos button:nth-child(1)'); await pt.waitForTimeout(100);
+  var t5 = await pt.evaluate(lerTema);
+  ok(t5.tema === 'auto' && t5.salvo === 'auto' && t5.marcado === 'Automático' && t5.fundo === ESCURO && t5.barra === '#141c2b', 'Sobre › Automático: escolha guardada (mg-tema=auto) e segue o celular no escuro');
+  await pt.emulateMedia({ colorScheme: 'light' }); await pt.waitForTimeout(150);
+  var t6 = await pt.evaluate(lerTema);
+  ok(t6.tema === 'auto' && t6.fundo === CLARO && t6.barra === '#0b4ea2', 'Automático: o celular volta ao claro e o app acompanha na hora (barra #0b4ea2)');
+  await pt.emulateMedia({ colorScheme: 'dark' }); await pt.waitForTimeout(150);
+  await pt.click('#conteudo .segmentos button:nth-child(2)'); await pt.waitForTimeout(100);
+  var t7 = await pt.evaluate(lerTema);
+  ok(t7.tema === 'light' && t7.salvo === 'light' && t7.marcado === 'Claro' && t7.fundo === CLARO && t7.barra === '#0b4ea2', 'Sobre › Claro: claro com o celular no escuro');
+  /* página de privacidade: mesma regra (claro sem escolha; escuro só com a escolha) */
+  await pt.evaluate(function () { localStorage.removeItem('mg-tema'); });
+  function lerPagina() { return [getComputedStyle(document.body).backgroundColor, document.querySelector('meta[name="theme-color"]').getAttribute('content')]; }
+  await pt.goto(base + 'privacidade.html'); var pp0 = await pt.evaluate(lerPagina);
+  await pt.evaluate(function () { localStorage.setItem('mg-tema', 'dark'); }); await pt.reload(); var pp1 = await pt.evaluate(lerPagina);
+  ok(pp0[0] === CLARO && pp0[1] === '#0b4ea2' && pp1[0] === ESCURO && pp1[1] === '#141c2b', 'privacidade.html: claro sem escolha (celular no escuro) e escuro com a escolha Escuro (' + pp0.concat(pp1).join(', ') + ')');
+  await ctxTema.close();
+  ok(!errosTema.length, 'sem erros de console no tema' + (errosTema.length ? ':\n    ' + errosTema.join('\n    ') : ''));
 
   /* ---------- service worker: registro, cache e uso offline ---------- */
   console.log('\nService worker');

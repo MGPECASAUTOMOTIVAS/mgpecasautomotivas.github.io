@@ -6,9 +6,9 @@
 <title>MG Peças Automotivas</title>
 <meta name="description" content="Catálogo de peças MG Peças Automotivas: busca pelo código MG, pelo número original, pelo veículo ou pela placa.">
 <meta name="application-name" content="MG Peças">
-<meta name="theme-color" content="#0b4ea2" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#141c2b" media="(prefers-color-scheme: dark)">
-<meta name="color-scheme" content="light dark">
+<!-- tema claro sempre que a pessoa não escolheu outro (o script abaixo troca as duas antes da 1ª pintura; app.js, corDoTema) -->
+<meta name="theme-color" content="#0b4ea2">
+<meta name="color-scheme" content="only light">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -44,8 +44,18 @@
 <link rel="stylesheet" href="app.css">
 <!-- Configuração (dadosBase, placaUrl, loja, versão): config.js é o único lugar a mudar; o service worker lê o mesmo arquivo -->
 <script src="config.js"></script>
+<!-- Tema: o app abre sempre no claro, como o site, qualquer que seja o tema do celular. Escuro só por escolha (botão da lua
+     no Início ou Sobre › Tema; "Automático" segue o celular), guardada em mg-tema: light, dark ou auto. Aplicado aqui, antes
+     da 1ª pintura, com a cor da barra do sistema (theme-color) do tema que vai aparecer. -->
 <script>
-try { var t = localStorage.getItem('mg-tema'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+(function () { try {
+  var t = localStorage.getItem('mg-tema'); if (t !== 'light' && t !== 'dark' && t !== 'auto') return;
+  document.documentElement.setAttribute('data-theme', t);
+  if (t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#141c2b');
+    document.querySelector('meta[name="color-scheme"]').setAttribute('content', 'dark');
+  }
+} catch (e) {} })();
 </script>
 </head>
 <body>
