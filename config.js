@@ -19,5 +19,5 @@ self.MG_CONFIG = {
   mlSufixo: 'MG Mangueiras - MG Peças Automotivas',
   mlMarcaId: '64522',
   etiquetas: false,
-  versao: '2026.11.02-33'
+  versao: '2026.11.02-34'
 };

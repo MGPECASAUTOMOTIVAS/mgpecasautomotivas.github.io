@@ -37,7 +37,8 @@
 <meta name="twitter:image" content="https://mgpecasautomotivas.github.io/icones/capa-social.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preconnect" href="https://dcdn-us.mitiendanube.com" crossorigin>
+<!-- fotos da loja: <img> sem crossorigin usa a conexão comum (com crossorigin, a conexão aberta aqui ficava sem uso) -->
+<link rel="preconnect" href="https://dcdn-us.mitiendanube.com">
 <!-- fontes (display=swap) sem travar a 1ª pintura: carregam como preload e viram stylesheet ao chegar -->
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&display=swap"></noscript>
@@ -76,12 +77,14 @@
   </div>
 </nav>
 
-<!-- regiões vivas: leitores de tela anunciam a troca de tela, a contagem de resultados e os avisos (toast) -->
+<!-- regiões vivas: leitores de tela anunciam a troca de tela, a contagem de resultados e os avisos (toast). A região do
+     toast fica sempre presente, em volta dele: o aviso que aparece dentro dela é anunciado (uma região que nasce junto
+     com o texto, saindo do hidden, nem sempre é) -->
 <div id="anuncio" class="visualmente-oculto" role="status" aria-live="polite"></div>
-<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<div role="status" aria-live="polite"><div id="toast" class="toast" hidden></div></div>
 
 <div class="faixa-instalar" id="faixa-instalar" hidden>
-  <img src="icones/icone-192.png" alt="" width="44" height="44">
+  <img src="icones/icone-192.png" alt="" width="44" height="44" loading="lazy">
   <div class="faixa-txt"><b>Instale o app da MG</b><span>Abre direto da tela inicial, mesmo sem internet.</span></div>
   <button type="button" class="btn btn-primario btn-mini" id="btn-instalar">Instalar</button>
   <button type="button" class="btn-fechar" id="btn-fechar-instalar" aria-label="Fechar">×</button>

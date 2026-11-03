@@ -15,6 +15,7 @@
   --esq-a: #e9eef5; --esq-b: #f6f8fb; --topo-faixa: #0b4ea2; --logo-chip: transparent;
   --borda: #dde4ee;
   --borda-forte: #c3cdd9;
+  --borda-controle: #808b9c; /* contorno de campo, seletor, chip e botão neutro: 3,15:1 sobre --fundo, 3,45:1 sobre branco (mínimo 3:1) */
   --ok: #157a3c; --ok-fundo: #e6f5ec;
   --aviso: #8a5a00; --aviso-fundo: #fff5dc;
   --erro: #a3232a; --erro-fundo: #fdecec;
@@ -44,7 +45,7 @@
     --esq-a: #1a2436; --esq-b: #243044; --topo-faixa: #141c2b; --logo-chip: #ffffff;
     --fundo: #0b1220; --superficie: #141c2b; --superficie-2: #1a2436;
     --texto: #e8eef8; --texto-2: #a3aec0; --texto-3: #8a96a8; /* 5,2:1 sobre --superficie-2 */
-    --borda: #243044; --borda-forte: #34425a;
+    --borda: #243044; --borda-forte: #34425a; --borda-controle: #66748c; /* 3,3:1 sobre --superficie-2 escura */
     --ok: #5fd08a; --ok-fundo: #10301d; --aviso: #ffd37a; --aviso-fundo: #3a2a05; --erro: #ff8a8f; --erro-fundo: #3d1316;
     --sombra: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35); --sombra-alta: 0 10px 30px rgba(0,0,0,.6);
     --placa-fundo: #f4f6f8; --placa-texto: #1b1b1b; --placa-dica: #656c78;
@@ -59,7 +60,7 @@
   --esq-a: #1a2436; --esq-b: #243044; --topo-faixa: #141c2b; --logo-chip: #ffffff;
   --fundo: #0b1220; --superficie: #141c2b; --superficie-2: #1a2436;
   --texto: #e8eef8; --texto-2: #a3aec0; --texto-3: #8a96a8; /* 5,2:1 sobre --superficie-2 */
-  --borda: #243044; --borda-forte: #34425a;
+  --borda: #243044; --borda-forte: #34425a; --borda-controle: #66748c; /* 3,3:1 sobre --superficie-2 escura */
   --ok: #5fd08a; --ok-fundo: #10301d; --aviso: #ffd37a; --aviso-fundo: #3a2a05; --erro: #ff8a8f; --erro-fundo: #3d1316;
   --sombra: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35); --sombra-alta: 0 10px 30px rgba(0,0,0,.6);
   --placa-fundo: #f4f6f8; --placa-texto: #1b1b1b; --placa-dica: #656c78;
@@ -68,7 +69,12 @@
 }
 
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; height: 100%; }
+/* foco do teclado nunca atrás do topo fixo nem da barra de abas (ou da barra "Atualização disponível" sobre ela): o navegador
+   rola a tela para o controle com o Tab deixando essas margens livres. A margem de cima só vale com o foco no conteúdo: com o
+   foco num botão do próprio topo (lua, voltar), ela faria a tela rolada pular */
+html { -webkit-text-size-adjust: 100%; height: 100%; scroll-padding-bottom: calc(var(--abas-altura) + var(--sa-fundo) + 16px); }
+html:has(#conteudo :focus) { scroll-padding-top: calc(var(--sa-topo) + 72px); }
+html:has(.aviso-atualizar:not([hidden])), html:has(body:not(.rota-inicio):not(.rota-instalar) .faixa-instalar:not([hidden])) { scroll-padding-bottom: calc(var(--abas-altura) + var(--sa-fundo) + 96px); }
 /* Tamanho da fonte do sistema: os textos usam rem, então a configuração "Tamanho da fonte" do Android (Chrome muda o tamanho
    base) escala o app inteiro. No iPhone/iPad o Safari só obedece ao "Tamanho do texto" do iOS quando o tamanho base vem de
    -apple-system-body (17px no ajuste padrão, maior ou menor conforme o aparelho); a família continua a do app (body). */
@@ -94,7 +100,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .zoom { --foco: #f5b400; }
 .aviso-atualizar { --foco: var(--foco-inverso); }
 .tela:focus { outline: none; } /* o foco vai para o conteúdo ao trocar de tela (sem anel na área inteira) */
-.pular { position: absolute; left: -999px; top: 0; background: var(--superficie); color: var(--texto); padding: 12px 16px; z-index: 100; border-radius: 10px; box-shadow: var(--sombra-alta); font-weight: 600; }
+.pular { position: absolute; left: -999px; top: 0; background: var(--superficie); color: var(--texto); padding: 12px 16px; min-height: 48px; z-index: 100; border-radius: 10px; box-shadow: var(--sombra-alta); font-weight: 600; }
 .pular:focus { left: 12px; top: 12px; }
 [hidden] { display: none !important; }
 .visualmente-oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -110,16 +116,19 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
   border-bottom: 1px solid var(--borda);
 }
 .topo-logo { height: 36px; width: auto; padding: 3px 6px; border-radius: 8px; background: var(--logo-chip); }
-.topo-logo-link { display: flex; align-items: center; flex: 1; min-width: 0; min-height: 44px; }
+.topo-logo-link { display: flex; align-items: center; flex: 1; min-width: 0; min-height: 48px; margin: -2px 0; }
 .topo-titulo { flex: 1; min-width: 0; margin: 0; font: 700 1.25rem/1.1 var(--cond); text-transform: uppercase; letter-spacing: .02em; overflow-wrap: anywhere; } /* o título quebra em 2 linhas com zoom ou fonte grande, em vez de "Linhas de produ…" */
 .topo-sub { display: block; font: 500 .75rem/1.2 var(--fonte); text-transform: none; letter-spacing: 0; color: var(--texto-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Área de toque de 48 × 48 px (Google Play e WCAG) sem mudar o desenho: a caixa do botão (que é o que o leitor de tela e
+   o relatório do Play medem) tem 48 px, com 2 px de borda transparente em volta; o fundo do toque fica dentro da borda
+   (background-clip), então o quadrado que aparece continua com 44 px, e a margem de -2 px mantém tudo no mesmo lugar */
 .btn-icone {
-  width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; display: inline-flex;
+  width: 48px; height: 48px; margin: -2px; border: 2px solid transparent; border-radius: 14px; background: transparent padding-box; display: inline-flex;
   align-items: center; justify-content: center; cursor: pointer; color: var(--texto); flex: 0 0 auto;
 }
-.btn-icone:active { background: var(--superficie-2); }
+.btn-icone:active { background-color: var(--superficie-2); }
 .btn-icone svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.btn-icone.voltar { margin-left: -8px; }
+.btn-icone.voltar { margin-left: -10px; }
 
 /* aviso discreto de "Sem conexão" (navigator.onLine): fica logo abaixo do topo, no fluxo da página, e some ao voltar a conexão */
 .aviso-offline { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 16px; background: var(--aviso-fundo); color: var(--aviso); font: 600 .8125rem/1.3 var(--fonte); text-align: center; border-bottom: 1px solid color-mix(in srgb, var(--aviso) 25%, transparent); }
@@ -131,7 +140,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .entrada-tela > .nota-legal { margin-top: 20px; }
 .secao { margin-top: 24px; }
 .secao-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.secao-cab .link { font: 600 .875rem var(--fonte); text-decoration: none; padding: 14px 0 14px 12px; margin: -14px 0; }
+.secao-cab .link { position: relative; z-index: 1; font: 600 .875rem var(--fonte); text-decoration: none; padding: 16px 0 16px 12px; margin: -16px 0; } /* toque de 48 px ou mais sem afastar o título; por cima do bloco de baixo, onde a área de toque avança sobre ele */
 .rotulo { display: block; font: 600 .75rem/1.2 var(--cond); text-transform: uppercase; letter-spacing: .1em; color: var(--texto-2); margin-bottom: 6px; }
 .ajuda { font-size: .8125rem; color: var(--texto-2); margin: 8px 0 0; text-wrap: pretty; } /* sem palavra sozinha na última linha ("…antes de / instalar.") */
 .cartao { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--raio); padding: 16px; box-shadow: var(--sombra); }
@@ -143,13 +152,13 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .campo + .campo, .entrada-wrap + .campo, .seletor > .campo ~ .campo { margin-top: 12px; }
 .aviso-form:not(:empty) { margin-top: 12px; }
 .entrada, .select {
-  width: 100%; height: 52px; border: 1.5px solid var(--borda-forte); border-radius: var(--raio-p); padding: 0 14px;
+  width: 100%; height: 52px; border: 1.5px solid var(--borda-controle); border-radius: var(--raio-p); padding: 0 14px;
   font: 500 1rem var(--fonte); background: var(--superficie); color: var(--texto); appearance: none; -webkit-appearance: none;
 }
 .entrada::placeholder { color: var(--texto-3); }
 .entrada:focus, .select:focus { border-color: var(--mg); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--mg) 22%, transparent); }
 .entrada:focus-visible, .select:focus-visible { outline: 3px solid var(--foco); outline-offset: 0; box-shadow: none; }
-.select:disabled { color: var(--texto-3); background: var(--superficie-2); }
+.select:disabled { color: var(--texto-3); background-color: var(--superficie-2); }
 .select-wrap { position: relative; }
 .select-wrap::after {
   content: ""; position: absolute; right: 16px; top: 50%; width: 9px; height: 9px; margin-top: -7px;
@@ -161,7 +170,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .entrada-wrap { position: relative; }
 .entrada-wrap .entrada { padding-left: 44px; }
 .entrada-wrap > svg { position: absolute; left: 14px; top: 50%; width: 20px; height: 20px; margin-top: -10px; fill: none; stroke: var(--texto-3); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
-.entrada-wrap .limpar { position: absolute; right: 4px; top: 4px; width: 44px; height: 44px; border: 0; background: transparent; color: var(--texto-2); font-size: 22px; border-radius: 10px; cursor: pointer; }
+.entrada-wrap .limpar { position: absolute; right: 2px; top: 2px; width: 48px; height: 48px; border: 0; background: transparent; color: var(--texto-2); font-size: 22px; border-radius: 10px; cursor: pointer; } /* toque de 48 px, o × no mesmo lugar */
 /* linha de busca (Início e Busca): campo + botão na mesma linha, 56px. A lupa fica só no botão (dentro do campo sobrava
    pouco espaço); no celular (linha com menos de 24rem: 390 e 360 px) o botão é só a lupa, 56x56, para o placeholder
    "Código, nº original ou nome" caber inteiro; em tablet e computador o botão traz o texto "Buscar" */
@@ -169,7 +178,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .busca-linha .entrada-wrap { flex: 1 1 auto; min-width: 0; }
 .busca-linha .entrada-wrap > svg { display: none; }
 .busca-linha .entrada { height: 56px; padding-left: 14px; padding-right: 12px; }
-.busca-linha .entrada-wrap .limpar { top: 6px; }
+.busca-linha .entrada-wrap .limpar { top: 4px; }
 .busca-linha .entrada-wrap:has(.limpar:not([hidden])) .entrada { padding-right: 48px; }
 .entrada::-webkit-search-cancel-button, .entrada::-webkit-search-decoration { -webkit-appearance: none; appearance: none; display: none; } /* o × é o do app (.limpar); com o nativo apareciam dois */
 .busca-linha .btn-buscar { flex: 0 0 auto; width: auto; min-height: 56px; padding: 0 18px; gap: 8px; }
@@ -177,14 +186,15 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
   .busca-linha .btn-buscar { width: 56px; padding: 0; }
   .busca-linha .btn-buscar span { display: none; }
 }
-/* busca por voz: o botão do microfone (44px) só existe quando o navegador reconhece fala (app.js: vozDisponivel); fica
-   dentro do campo, à direita, e o × de limpar passa para a esquerda dele quando há texto. Sem o botão, nada muda. */
-.busca-linha .btn-voz { position: absolute; right: 4px; top: 6px; width: 44px; height: 44px; border: 0; background: transparent; color: var(--texto-2); border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+/* busca por voz: o botão do microfone (toque de 48px) só existe quando o navegador reconhece fala (app.js: vozDisponivel);
+   fica dentro do campo, à direita, e o × de limpar passa para a esquerda dele quando há texto (os dois toques lado a lado,
+   sem sobrepor). Sem o botão, nada muda. */
+.busca-linha .btn-voz { position: absolute; right: 2px; top: 4px; width: 48px; height: 48px; border: 2px solid transparent; background: transparent padding-box; color: var(--texto-2); border-radius: 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 .busca-linha .btn-voz svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; position: relative; }
-.busca-linha .btn-voz:active { background: var(--superficie-2); }
+.busca-linha .btn-voz:active { background-color: var(--superficie-2); }
 .busca-linha .entrada-wrap:has(.btn-voz) .entrada { padding-left: 12px; padding-right: 48px; }
-.busca-linha .entrada-wrap:has(.btn-voz) .limpar { right: 48px; }
-.busca-linha .entrada-wrap:has(.btn-voz):has(.limpar:not([hidden])) .entrada { padding-right: 92px; }
+.busca-linha .entrada-wrap:has(.btn-voz) .limpar { right: 50px; }
+.busca-linha .entrada-wrap:has(.btn-voz):has(.limpar:not([hidden])) .entrada { padding-right: 96px; }
 @container (max-width: 22rem) { .busca-linha .entrada-wrap:has(.btn-voz) .entrada::placeholder { font-size: .9375rem; } } /* 360 px: "Código, nº original ou nome" inteiro ao lado do microfone, mesmo antes da fonte Barlow carregar */
 /* ouvindo: microfone na cor da MG com um anel que pulsa (discreto; some com prefers-reduced-motion) */
 .busca-linha.ouvindo .btn-voz { color: var(--mg); }
@@ -192,7 +202,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .busca-linha.ouvindo .entrada { border-color: var(--mg); }
 @keyframes pulsar-voz { from { transform: scale(.7); opacity: .6; } to { transform: scale(1.25); opacity: 0; } }
 .voz-estado { margin: 8px 0 0; font-size: .875rem; color: var(--texto-2); }
-.voz-estado[hidden] { display: none; }
+.voz-estado:empty { margin: 0; } /* região viva vazia em repouso: sem altura nem margem */
 .voz-aviso { margin-top: 10px; }
 .voz-aviso .confirmar-corpo p { margin: 0 0 10px; line-height: 1.35; }
 .voz-aviso .confirmar-corpo p:focus { outline: none; }
@@ -240,21 +250,31 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .entrada-placa:focus-visible { outline: 3px solid #f5b400; outline-offset: 2px; box-shadow: none; }
 
 /* ---------- botões ---------- */
+/* contorno (--btn-borda) e sombra (--btn-sombra) por variável: o botão de 44 px (.btn-mini, .btn-acao) desenha o mesmo
+   contorno por dentro (box-shadow inset), porque a borda dele é a faixa transparente que leva a caixa a 48 px */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 8px 20px;
-  border-radius: var(--raio-p); border: 1.5px solid transparent; font: 700 1.0625rem/1.1 var(--cond); text-transform: uppercase; text-align: center;
+  border-radius: var(--raio-p); border: 1.5px solid var(--btn-borda, transparent); box-shadow: var(--btn-sombra, none); font: 700 1.0625rem/1.1 var(--cond); text-transform: uppercase; text-align: center;
   letter-spacing: .06em; text-decoration: none; cursor: pointer; width: 100%; transition: transform .12s, background-color .15s, box-shadow .15s;
 }
 .btn:active { transform: scale(.985); }
 .btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
-.btn-primario { background: var(--btn-fundo); color: var(--mg-texto-sobre); box-shadow: 0 6px 16px color-mix(in srgb, var(--mg) 35%, transparent); }
-.btn-primario:hover { background: var(--btn-fundo-hover); }
-.btn-contorno { background: transparent; color: var(--mg); border-color: var(--mg); }
-.btn-contorno:hover { background: var(--mg-claro); }
-.btn-neutro { background: var(--superficie-2); color: var(--texto); border-color: var(--borda); }
-.btn-amarelo { background: #f5b400; color: #1b1b1b; box-shadow: 0 6px 16px rgba(245,180,0,.35); }
-.btn-amarelo:hover { background: #ffc21a; }
-.btn-mini { min-height: 44px; padding: 0 14px; font-size: .9375rem; width: auto; }
+.btn-primario { background: var(--btn-fundo); color: var(--mg-texto-sobre); --btn-sombra: 0 6px 16px color-mix(in srgb, var(--mg) 35%, transparent); }
+.btn-primario:hover { background-color: var(--btn-fundo-hover); }
+.btn-contorno { background: transparent; color: var(--mg); --btn-borda: var(--mg); }
+.btn-contorno:hover { background-color: var(--mg-claro); }
+.btn-neutro { background: var(--superficie-2); color: var(--texto); --btn-borda: var(--borda-controle); }
+.btn-amarelo { background: #f5b400; color: #1b1b1b; --btn-sombra: 0 6px 16px rgba(245,180,0,.35); }
+.btn-amarelo:hover { background-color: #ffc21a; }
+/* 44 px à vista, caixa de 48 px: 2 px de borda transparente em cima e embaixo (o fundo fica dentro dela), contorno de
+   1 px por dentro (a borda de 1,5 px de antes já saía com 1 px no Chrome) e margem de -2 px para nada sair do lugar.
+   A sombra do botão azul ou amarelo sai de um ::before do tamanho do botão à vista: a do próprio botão começaria fora
+   da caixa de 48 e deixaria uma fresta clara de 2 px entre o botão e a sombra */
+.btn-mini, .btn-acao { min-height: 48px; margin-top: -2px; margin-bottom: -2px; border-width: 2px 0; border-color: transparent; border-radius: var(--raio-p) / calc(var(--raio-p) + 2px); background-clip: padding-box; box-shadow: inset 0 0 0 1px var(--btn-borda, transparent); }
+.btn-mini.btn-primario, .btn-mini.btn-amarelo { position: relative; isolation: isolate; }
+.btn-mini.btn-primario::before, .btn-mini.btn-amarelo::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: var(--raio-p); box-shadow: var(--btn-sombra); pointer-events: none; }
+.btn-mini:focus-visible, .btn-acao:focus-visible { outline-offset: 0; } /* anel a 2 px do botão à vista, como antes */
+.btn-mini { padding: 0 15px; font-size: .9375rem; width: auto; }
 .btn[disabled] { opacity: .6; cursor: default; }
 .btn + .btn { margin-top: 10px; }
 /* botão com rótulo em duas linhas (Sobre: "Sou distribuidor" + explicação): não quebra no celular */
@@ -263,6 +283,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .btn-duplo-txt small { font: 500 .8125rem/1.25 var(--fonte); text-transform: none; letter-spacing: 0; color: var(--texto-2); margin-top: 2px; }
 .linha-btn { display: flex; flex-wrap: wrap; gap: 10px; } /* com zoom ou fonte grande o 2º botão desce em vez de sair da tela */
 .linha-btn .btn { margin: 0; flex: 1 1 auto; min-width: 0; }
+.linha-btn .btn-mini, .linha-btn .btn-acao { margin: -2px 0; }
 .carregando::after {
   content: ""; width: 18px; height: 18px; border: 2.5px solid currentColor; border-right-color: transparent; border-radius: 50%;
   animation: girar .7s linear infinite; margin-left: 4px;
@@ -271,25 +292,30 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 
 /* ---------- chips ---------- */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chips.rolar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px; }
+.chips.rolar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px; } /* os 2 px de cima e de baixo recebem a caixa de 48 px do chip (pílula de 44) sem corte */
 .chips.rolar::-webkit-scrollbar { display: none; }
 /* chips roláveis (JS rolavel): degradê na borda direita enquanto houver chips escondidos à direita (tem-mais) e na
    esquerda quando a linha já rolou e há chips escondidos atrás (tem-antes, ex.: "Todos" e "mais" na lista de anos) */
 .rolar-wrap { position: relative; margin: 0 -16px; }
 .rolar-wrap > .chips.rolar { margin: 0; }
+.rolar-wrap > .chips.rolar:has(> .chip-pequeno) { padding-top: 4px; padding-bottom: 4px; margin-top: -2px; margin-bottom: -2px; } /* pílula de 40 em caixa de 48: a fileira ocupa o mesmo espaço */
 .rolar-wrap::before, .rolar-wrap::after { content: ""; position: absolute; top: 0; bottom: 0; width: 56px; pointer-events: none; opacity: 0; transition: opacity .2s; }
 .rolar-wrap::after { right: 0; background: linear-gradient(90deg, transparent, var(--fundo) 70%); }
 .rolar-wrap::before { left: 0; width: 40px; background: linear-gradient(270deg, transparent, var(--fundo) 70%); }
 .rolar-wrap.tem-mais::after { opacity: 1; }
 .rolar-wrap.tem-antes::before { opacity: 1; }
+/* chip: pílula de 44 px (40 no .chip-pequeno) dentro de uma caixa de 48 px ou mais — borda transparente em volta, fundo
+   só dentro dela, contorno de 1 px por dentro na cor --chip-borda e margem negativa para nada mudar de lugar. O anel de
+   foco do teclado (2 px) ocupa a faixa transparente, colado na pílula: não é cortado pela fileira que rola */
 .chip {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
-  border: 1.5px solid var(--borda-forte); background: var(--superficie); color: var(--texto); font: 600 .875rem var(--fonte);
-  text-decoration: none; cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px; min-height: 48px; margin: -2px; padding: 0 15px; border-radius: 999px;
+  border: 2px solid transparent; background: var(--superficie) padding-box; box-shadow: inset 0 0 0 1px var(--chip-borda, var(--borda-controle));
+  color: var(--texto); font: 600 .875rem var(--fonte); text-decoration: none; cursor: pointer; white-space: nowrap;
 }
-.chip.ativo { background: var(--btn-fundo); border-color: var(--btn-fundo); color: #fff; }
-.chip-pequeno { min-height: 40px; padding: 0 12px; font-size: .8125rem; position: relative; }
-.chip-pequeno::after { content: ""; position: absolute; left: 0; right: 0; top: -2px; bottom: -2px; } /* área de toque de 44px sem crescer o chip */
+.chip:focus-visible { outline-width: 2px; outline-offset: -2px; }
+.chip.ativo { background-color: var(--btn-fundo); --chip-borda: var(--btn-fundo); color: #fff; }
+.chip-pequeno { border-width: 4px; margin: -4px; padding: 0 13px; font-size: .8125rem; }
+.chip-pequeno:focus-visible { outline-offset: -4px; }
 .etiqueta { display: inline-block; padding: 3px 8px; border-radius: 6px; font: 700 .75rem/1.2 var(--cond); text-transform: uppercase; letter-spacing: .06em; }
 .etiqueta-aviso { background: var(--aviso-fundo); color: var(--aviso); }
 
@@ -308,7 +334,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .cv-principal { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 64px; text-decoration: none; color: var(--texto); border-radius: var(--raio) var(--raio) 0 0; }
 .cv-principal:hover { background: var(--superficie-2); }
 .cv-chips { padding: 0 14px 12px; }
-.cv-chips .chip { min-height: 44px; border-color: var(--mg); color: var(--mg-texto-claro); background: var(--mg-claro); max-width: 100%; white-space: normal; text-align: left; padding-top: 6px; padding-bottom: 6px; }
+.cv-chips .chip { --chip-borda: var(--mg); color: var(--mg-texto-claro); background-color: var(--mg-claro); max-width: calc(100% + 4px); white-space: normal; text-align: left; padding-top: 6px; padding-bottom: 6px; } /* +4: a borda transparente */
 
 /* ---------- status / vazio ---------- */
 .status { padding: 14px 16px; border-radius: var(--raio-p); font-size: .9375rem; display: flex; gap: 10px; align-items: flex-start; }
@@ -425,29 +451,35 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .acoes-fixas { margin-top: 16px; }
 .acoes-fixas .status + .btn { margin-top: 10px; }
 /* ficha: "Buscar esta peça para outro veículo" abaixo da tabela de aplicação (link de uma linha, toque de 44px, sem cartão novo) */
-.link-outro-veic { margin: 2px 0 -8px; }
+.link-acao.link-outro-veic { margin: 0 0 -10px; }
 /* ficha da peça: salvar em Minhas peças, compartilhar e adicionar à lista (botões menores, toque de 44px);
    com 150px de base cabem dois por linha no celular (o 3º desce inteiro) e três no computador */
 /* 4 ações (Salvar peça, Compartilhar, Adicionar à lista, Imprimir / PDF): grade de 2 por linha no celular (colunas de 150 px ou mais,
    4 na tela larga); um rótulo que não cabe quebra em 2 linhas dentro do botão em vez de empurrar o botão para a linha de baixo */
 .acoes-peca { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .acoes-peca .btn { white-space: normal; padding-top: 5px; padding-bottom: 5px; line-height: 1.1; }
-.btn-acao { min-height: 44px; padding: 0 8px; font-size: .9375rem; letter-spacing: .02em; width: auto; flex: 1 1 150px; gap: 5px; } /* "Adicionar à lista" com o contador cabe em meia coluna de 390 px */
+.btn-acao { padding: 0 9px; font-size: .9375rem; letter-spacing: .02em; width: auto; flex: 1 1 150px; gap: 5px; } /* "Adicionar à lista" com o contador cabe em meia coluna de 390 px */
 .btn-acao svg { width: 18px; height: 18px; }
 .btn-badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--btn-fundo); color: #fff; font: 700 .75rem/20px var(--cond); letter-spacing: 0; }
-.btn-favorito[aria-pressed="true"] { background: var(--mg-claro); border-color: var(--mg); color: var(--mg-texto-claro); }
+.btn-favorito[aria-pressed="true"] { background-color: var(--mg-claro); --btn-borda: var(--mg); color: var(--mg-texto-claro); }
 .btn-favorito[aria-pressed="true"] svg { fill: currentColor; }
 /* "Compartilhar esta busca" nos resultados por veículo: link discreto, mas com área de toque de 44px */
 .res-acoes { margin-top: 2px; }
+/* "Motor completo" fica colado na fileira de motores e logo acima do "Compartilhar esta busca": as caixas de 48 px ficam
+   uma em cima da outra, sem se sobrepor e sem mudar o desenho (o seletor cresce só para baixo, com 4 px de borda
+   transparente embaixo; o link também, com o texto no mesmo lugar) */
+.filtro-completo .select-mini { margin: 0 0 -4px; border-width: 0 0 4px; border-radius: 10px / 10px 10px 14px 14px; }
+.res-acoes .link-acao { margin: 2px 0 -6px; padding-bottom: 8px; }
 /* chips de ano/motor nos resultados por veículo: rótulo fixo à esquerda, chips rolam até a borda direita */
 .filtros-veic:not(:empty) { margin-top: 10px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .filtro-veic { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .filtro-rotulo { flex: 0 0 44px; font: 700 .75rem var(--cond); letter-spacing: .08em; text-transform: uppercase; color: var(--texto-3); }
 .filtro-veic .rolar-wrap { flex: 1 1 auto; min-width: 0; margin: 0 -16px 0 0; }
 .filtro-veic .chips.rolar { padding: 2px 16px 2px 0; }
-.filtro-veic .chip { min-height: 44px; flex: 0 0 auto; }
-/* "mais" nas pontas da lista de anos: abre os anos escondidos daquele lado */
-.chip-mais { border-style: dashed; border-color: var(--mg); color: var(--mg); background: transparent; }
+.filtro-veic .chip { flex: 0 0 auto; }
+/* "mais" nas pontas da lista de anos: abre os anos escondidos daquele lado (contorno tracejado desenhado em ::before, na pílula) */
+.chip-mais { position: relative; color: var(--mg); background-color: transparent; --chip-borda: transparent; }
+.chip-mais::before { content: ""; position: absolute; inset: 0; border: 1.5px dashed var(--mg); border-radius: inherit; pointer-events: none; }
 /* seletor "Motor completo" (descrições completas da tabela) abaixo dos chips de motor */
 .filtro-completo .select-wrap { flex: 1 1 auto; min-width: 0; max-width: 360px; }
 .filtro-completo .select-motor { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* mais específico que .select-mini (width: auto), senão a opção mais longa alarga a página */
@@ -457,25 +489,24 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .motor-escolhido b { font-weight: 600; color: var(--texto); }
 .nota-pesada { margin-top: 12px; padding: 12px 14px; }
 .nota-pesada p { margin: 0 0 10px; font-size: .875rem; line-height: 1.4; color: var(--texto-2); }
-.nota-pesada .chip { min-height: 44px; }
-.link-acao { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; min-width: 44px; padding: 0; border: 0; background: transparent; color: var(--mg); font: 600 .875rem var(--fonte); cursor: pointer; }
+.link-acao { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px; min-width: 48px; margin-top: -2px; margin-bottom: -2px; padding: 0; border: 0; background: transparent; color: var(--mg); font: 600 .875rem var(--fonte); cursor: pointer; } /* toque de 48 px no espaço de 44 */
 .link-acao svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 /* Minhas peças: cartão da busca com botão "×" fora do link */
 .secao-cont { font-size: .8125rem; color: var(--texto-3); white-space: nowrap; }
 .item-com-acao { position: relative; }
 .item-com-acao .item { grid-template-columns: 96px 1fr; padding-right: 58px; }
 .item-remover {
-  position: absolute; right: 8px; top: 50%; margin-top: -22px; width: 44px; height: 44px; border: 0; border-radius: 12px;
-  background: transparent; color: var(--texto-3); cursor: pointer; display: flex; align-items: center; justify-content: center;
-}
-.item-remover:active { background: var(--superficie-2); color: var(--texto); }
+  position: absolute; right: 6px; top: 50%; margin-top: -24px; width: 48px; height: 48px; border: 2px solid transparent; border-radius: 14px;
+  background: transparent padding-box; color: var(--texto-3); cursor: pointer; display: flex; align-items: center; justify-content: center;
+} /* toque de 48 px; o fundo ao tocar continua no quadrado de 44 (dentro da borda transparente) */
+.item-remover:active { background-color: var(--superficie-2); color: var(--texto); }
 .item-remover svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 /* resultados: "+" de 44px no lugar da seta (põe a peça em Minha lista); o número no canto é a quantidade já na lista */
 .item-lista {
-  position: absolute; right: 8px; top: 50%; margin-top: -22px; width: 44px; height: 44px; border: 0; border-radius: 12px;
-  background: transparent; color: var(--mg); cursor: pointer; display: flex; align-items: center; justify-content: center;
+  position: absolute; right: 6px; top: 50%; margin-top: -24px; width: 48px; height: 48px; border: 2px solid transparent; border-radius: 14px;
+  background: transparent padding-box; color: var(--mg); cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
-.item-lista:active { background: var(--mg-claro); }
+.item-lista:active { background-color: var(--mg-claro); }
 .item-lista svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .item-lista-num { position: absolute; top: 1px; right: 0; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--btn-fundo); color: #fff; font: 700 .6875rem/18px var(--cond); letter-spacing: 0; }
 
@@ -485,23 +516,25 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .lista-item { background: var(--superficie); border: 1px solid var(--borda); border-radius: 14px; box-shadow: var(--sombra); padding: 8px 8px 8px 10px; }
 .lista-item .item { border: 0; background: transparent; box-shadow: none; padding: 2px 48px 2px 0; min-height: 57px; border-radius: 8px; }
 .lista-item .item:active { transform: none; }
-.lista-item .item-remover { right: 2px; top: 8px; margin-top: 0; }
+.lista-item .item-remover { right: 0; top: 6px; margin-top: 0; }
 .lista-item .item-apl { text-wrap: pretty; } /* nome da linha sob a peça, com fonte grande: "Mangueiras do Filtro / de Ar" */
 .lista-qtd { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--borda); }
-.qtd-btn { width: 44px; height: 44px; flex: 0 0 auto; border: 1px solid var(--borda); border-radius: 10px; background: var(--superficie-2); color: var(--texto); font: 700 1.375rem/1 var(--cond); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-.qtd-btn:active { background: var(--borda); }
+/* − número +: 44 px à vista em caixas de 48 (borda transparente, fundo dentro dela, contorno de 3:1 desenhado por dentro) */
+.qtd-btn { width: 48px; height: 48px; margin: -2px; flex: 0 0 auto; border: 2px solid transparent; border-radius: 12px; background: var(--superficie-2) padding-box; box-shadow: inset 0 0 0 1px var(--borda-controle); color: var(--texto); font: 700 1.375rem/1 var(--cond); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.qtd-btn:active { background-color: var(--borda); }
 .qtd-btn[disabled] { opacity: .4; cursor: default; }
-.qtd-num { width: 64px; height: 44px; flex: 0 0 auto; text-align: center; border: 1px solid var(--borda); border-radius: 10px; background: var(--superficie); color: var(--texto); font: 700 1.125rem var(--cond); -moz-appearance: textfield; appearance: textfield; }
+.qtd-btn:focus-visible, .btn-ampliar:focus-visible { outline-offset: 0; }
+.qtd-num { width: 64px; height: 48px; margin: -2px 0; flex: 0 0 auto; text-align: center; border: solid transparent; border-width: 2px 0; border-radius: 10px / 12px; background: var(--superficie) padding-box; box-shadow: inset 0 0 0 1px var(--borda-controle); color: var(--texto); font: 700 1.125rem var(--cond); -moz-appearance: textfield; appearance: textfield; }
 .qtd-num::-webkit-outer-spin-button, .qtd-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.qtd-num:focus { border-color: var(--mg); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--mg) 22%, transparent); }
-.qtd-num:focus-visible { outline: 3px solid var(--foco); outline-offset: 0; box-shadow: none; }
+.qtd-num:focus { outline: none; box-shadow: inset 0 0 0 2px var(--mg); }
+.qtd-num:focus-visible { outline: 3px solid var(--foco); outline-offset: 0; box-shadow: inset 0 0 0 1px var(--mg); }
 .qtd-un { font: 600 .8125rem var(--fonte); color: var(--texto-2); margin-left: 2px; }
 .lista-cont { margin: 0; font: 600 .875rem var(--fonte); color: var(--texto-2); }
 .lista-acoes { padding: 12px 14px 14px; }
 .lista-acoes .btn { padding-left: 12px; padding-right: 12px; } /* "Enviar pelo WhatsApp" em uma linha também em 360 */
 .lista-acoes .ajuda { margin-top: 10px; }
 .lista-itens { margin: 12px 0; } /* Minha lista: os cartões das peças não encostam no cartão das ações nem no "Ver o texto da lista" */
-.lista-texto summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font: 600 .875rem var(--fonte); color: var(--mg); margin: -12px 0; }
+.lista-texto summary { cursor: pointer; min-height: 48px; display: flex; align-items: center; font: 600 .875rem var(--fonte); color: var(--mg); margin: -14px 0; }
 .lista-texto[open] summary { margin-bottom: 0; }
 .lista-texto-pre { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: .875rem/1.5 var(--fonte); color: var(--texto); }
 .lista-rodape { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -509,7 +542,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 @media (min-width: 560px) {
   .lista-item { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; align-items: center; gap: 10px; }
   .lista-item .item { padding-right: 0; }
-  .lista-item .item-remover { position: static; margin: 0; order: 3; }
+  .lista-item .item-remover { position: static; margin: -2px; order: 3; }
   .lista-qtd { margin-top: 0; padding-top: 0; border-top: 0; }
 }
 /* contador na aba Lista */
@@ -529,8 +562,11 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .lista-sobre svg { width: 22px; height: 22px; fill: none; stroke: var(--mg); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; margin-top: 2px; }
 .linha-opcao { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; }
 .segmentos { display: inline-flex; max-width: 100%; background: var(--superficie-2); border: 1px solid var(--borda); border-radius: 12px; padding: 2px; }
-.segmentos button { border: 0; background: transparent; min-height: 44px; padding: 0 12px; border-radius: 10px; font: 600 .875rem var(--fonte); color: var(--texto-2); cursor: pointer; flex: 1 1 auto; min-width: 0; }
-.segmentos button.ativo { background: var(--superficie); color: var(--texto); box-shadow: var(--sombra); }
+/* opção de 44 px à vista em caixa de 48 (borda transparente em cima e embaixo, margem de -2 px); a escolhida ganha contorno
+   de 3:1 (só o fundo branco sobre o cinza-claro não chegava a 1,1:1) */
+.segmentos button { border: solid transparent; border-width: 2px 0; margin: -2px 0; background: transparent padding-box; min-height: 48px; padding: 0 12px; border-radius: 10px / 12px; font: 600 .875rem var(--fonte); color: var(--texto-2); cursor: pointer; flex: 1 1 auto; min-width: 0; }
+.segmentos button:focus-visible { outline-offset: 0; }
+.segmentos button.ativo { background-color: var(--superficie); color: var(--texto); box-shadow: var(--sombra), inset 0 0 0 1px var(--borda-controle); }
 
 /* ---------- abas inferiores ---------- */
 .abas {
@@ -561,14 +597,15 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
   .faixa-instalar { gap: 8px; padding: 6px 2px 6px 12px; }
   .faixa-instalar img { display: none; }
   .faixa-txt { font-size: .75rem; line-height: 1.3; }
-  .faixa-txt b { font-size: .875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .faixa-instalar .btn-mini { padding: 0 10px; font-size: .875rem; }
+  .faixa-txt b { font-size: .875rem; }
+  .faixa-instalar .faixa-txt b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* só a faixa flutuante; o cartão do Início quebra a linha (zoom alto) */
+  .faixa-instalar .btn-mini { padding: 0 11px; font-size: .875rem; }
 }
 /* no Início já existe o cartão "Instale o app" (cartaoInstalar): a faixa flutuante fica só nas outras telas */
 .rota-inicio .faixa-instalar, .rota-instalar .faixa-instalar { display: none !important; }
 .faixa-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: .8125rem; color: var(--texto-2); }
 .faixa-txt b { font: 700 .9375rem var(--fonte); color: var(--texto); }
-.btn-fechar { width: 44px; height: 44px; border: 0; background: transparent; font-size: 26px; color: var(--texto-2); cursor: pointer; border-radius: 10px; flex: 0 0 auto; }
+.btn-fechar { width: 48px; height: 48px; margin: -2px; border: 0; background: transparent; font-size: 26px; color: var(--texto-2); cursor: pointer; border-radius: 10px; flex: 0 0 auto; }
 .instalar-cartao { display: flex; align-items: center; gap: 14px; }
 .instalar-cartao img { width: 56px; height: 56px; border-radius: 14px; box-shadow: var(--sombra); }
 .instalar-cartao .faixa-txt { font-size: .875rem; }
@@ -598,7 +635,7 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
 .cartao-agora .campo { margin-top: 12px; }
 .qr-cartao .grade-2 { margin-top: 12px; }
 .qr-cartao .grade-2 .btn { padding-left: 8px; padding-right: 8px; font-size: .9375rem; }
-.instalar-cartao .faixa-txt .link-acao { min-height: 44px; margin: -4px 0 -8px; justify-content: flex-start; text-align: left; align-self: flex-start; }
+.instalar-cartao .faixa-txt .link-acao { margin: -6px 0 -10px; justify-content: flex-start; text-align: left; align-self: flex-start; }
 @media (max-width: 400px) { /* em telas estreitas o texto ficava espremido entre o ícone e o botão: o botão desce para a linha de baixo */
   .instalar-cartao { flex-wrap: wrap; }
   .instalar-cartao .btn { width: 100%; flex: 1 0 100%; }
@@ -612,42 +649,47 @@ h3 { font-size: 1.0625rem; font-weight: 700; }
   display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--texto); color: var(--fundo);
   border-radius: 12px; padding: 10px 10px 10px 16px; font-size: .875rem; box-shadow: var(--sombra-alta);
 }
-.aviso-atualizar .btn { background: #f5b400; color: #1b1b1b; flex: 0 0 auto; }
+.aviso-atualizar .btn { background-color: #f5b400; color: #1b1b1b; flex: 0 0 auto; }
 .aviso-atualizar span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f5b400; margin-right: 8px; vertical-align: 1px; }
 
 /* toast */
 .toast { position: fixed; left: 50%; bottom: calc(var(--abas-altura) + var(--sa-fundo) + 16px); transform: translateX(-50%); width: max-content; max-width: min(560px, calc(100% - 32px)); background: var(--texto); color: var(--fundo); padding: 10px 16px; border-radius: 10px; font-size: .875rem; z-index: 50; box-shadow: var(--sombra-alta); animation: aparecer .2s ease-out; display: flex; align-items: center; gap: 10px; }
 /* ação no toast ("Ver"): link com 44px de toque sem engordar a tarja */
-.toast.com-acao { padding: 4px 6px 4px 16px; }
-.toast-acao { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 12px; border: 0; cursor: pointer; border-radius: 8px; color: var(--fundo); font: 700 .875rem var(--fonte); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; background: color-mix(in srgb, var(--fundo) 12%, transparent); }
+.toast.com-acao { padding: 2px 6px 2px 16px; }
+.toast-acao { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; min-width: 48px; padding: 0 12px; border: solid transparent; border-width: 2px 0; cursor: pointer; border-radius: 8px / 10px; color: var(--fundo); font: 700 .875rem var(--fonte); text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; background: color-mix(in srgb, var(--fundo) 12%, transparent) padding-box; } /* caixa de 48 px, fundo de 44 */
 
 /* com a faixa de instalar ou a barra de atualização à mostra, o toast sobe para não cobrir nenhuma das duas */
 body:has(.aviso-atualizar:not([hidden])) .toast { bottom: calc(var(--abas-altura) + var(--sa-fundo) + 90px); }
 body:not(.rota-inicio):not(.rota-instalar):has(.faixa-instalar:not([hidden])) .toast { bottom: calc(var(--abas-altura) + var(--sa-fundo) + 90px); } /* a faixa tem no máximo ~76px (também em 360) */
+/* e o fim da tela ganha espaço para o último controle (Limpar lista, QR code…) rolar até acima da barra, em vez de ficar embaixo dela */
+body:has(.aviso-atualizar:not([hidden])), body:not(.rota-inicio):not(.rota-instalar):has(.faixa-instalar:not([hidden])) { padding-bottom: calc(var(--abas-altura) + var(--sa-fundo) + 96px); }
 
 /* recentes */
 /* Recentes: chips de veículo e de busca por texto (toque de 44px) + "Limpar" */
 .recentes .secao-cab { align-items: center; margin-bottom: 6px; }
-.recentes .chip { min-height: 44px; max-width: 100%; background: var(--superficie-2); }
+.recentes .chip { max-width: calc(100% + 4px); background-color: var(--superficie-2); }
 .recentes .chip svg { width: 18px; height: 18px; flex: 0 0 auto; fill: none; stroke: var(--texto-2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .recentes .chip-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
 .mais { text-align: center; margin: 16px 0 0; }
 
 /* painel de resultados: filtro por linha (chips com contagem), total e ordem */
 .painel-res { margin-top: 4px; }
-.filtro-linhas .chip { min-height: 44px; flex: 0 0 auto; }
+.filtro-linhas .chip { flex: 0 0 auto; }
 .res-barra { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 12px; }
 .filtro-linhas + .res-barra { margin-top: 12px; }
 .res-cont { margin: 0; font: 600 .875rem var(--fonte); color: var(--texto-2); }
 .res-cont b { font: 800 1.25rem/1 var(--cond); color: var(--texto); }
-.res-cont .res-todas { min-height: 44px; margin: -12px 0; vertical-align: middle; text-decoration: underline; text-underline-offset: 3px; }
+.res-cont .res-todas { margin: -14px 0; vertical-align: middle; text-decoration: underline; text-underline-offset: 3px; }
 .select-mini-wrap { flex: 0 0 auto; }
-.select-mini { width: auto; height: 44px; font-size: .875rem; padding: 0 34px 0 12px; }
+/* seletor de 44 px à vista em caixa de 48 (borda transparente em cima e embaixo, contorno por dentro, margem de -2 px) */
+.select-mini { width: auto; height: 48px; margin: -2px 0; font-size: .875rem; padding: 0 35px 0 13px; border-color: transparent; border-width: 2px 0; border-radius: 10px / 12px; background-clip: padding-box; box-shadow: inset 0 0 0 1px var(--borda-controle); }
+.select-mini:focus { border-color: transparent; box-shadow: inset 0 0 0 2px var(--mg); }
+.select-mini:focus-visible { outline-offset: 0; box-shadow: inset 0 0 0 1px var(--mg); }
 .select-mini-wrap::after { right: 13px; }
 /* ordem + "Imprimir / PDF" lado a lado (tela do veículo); no celular o botão fica só com o ícone (44 px), o texto entra a partir de 560 px */
 .res-ferramentas { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .res-cont { min-width: 0; }
-.btn-imprimir-curto { min-width: 44px; padding: 0 11px; gap: 8px; }
+.btn-imprimir-curto { min-width: 48px; margin: -2px; border-width: 2px; border-radius: calc(var(--raio-p) + 2px); padding: 0 10.5px; gap: 8px; } /* quadrado de 44 à vista, caixa de 48 × 48 */
 .btn-imprimir-curto .btn-imprimir-txt { display: none; }
 @media (min-width: 560px) { .btn-imprimir-curto .btn-imprimir-txt { display: inline; } }
 .painel-res .grupo-cab:first-child { margin-top: 4px; }
@@ -671,10 +713,11 @@ body:not(.rota-inicio):not(.rota-instalar):has(.faixa-instalar:not([hidden])) .t
 /* computador com mouse: cartões, chips, abas e botões neutros respondem ao passar o cursor (no toque nada muda) */
 @media (hover: hover) and (pointer: fine) {
   .item:hover, .linha-card:hover, .cartao-link:hover { border-color: var(--borda-forte); background: var(--superficie-2); }
-  .chip:not(.ativo):hover { border-color: var(--mg); background: var(--mg-claro); color: var(--mg-texto-claro); }
-  .btn-neutro:hover { border-color: var(--borda-forte); background: var(--superficie); }
-  .btn-icone:hover, .aba:hover, .item-remover:hover, .qtd-btn:not([disabled]):hover { background: var(--superficie-2); }
-  .item-lista:hover { background: var(--mg-claro); }
+  .chip:not(.ativo):hover { --chip-borda: var(--mg); background-color: var(--mg-claro); color: var(--mg-texto-claro); }
+  .chip.chip-mais:hover { --chip-borda: transparent; }
+  .btn-neutro:hover { background-color: var(--superficie); }
+  .btn-icone:hover, .aba:hover, .item-remover:hover, .qtd-btn:not([disabled]):hover { background-color: var(--superficie-2); }
+  .item-lista:hover { background-color: var(--mg-claro); }
   .aba:hover { color: var(--mg); border-radius: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
@@ -685,6 +728,59 @@ body:not(.rota-inicio):not(.rota-instalar):has(.faixa-instalar:not([hidden])) .t
 @media (min-width: 760px) {
   .painel-res .lista { grid-template-columns: 1fr 1fr; } /* resultados por veículo e por texto em duas colunas: menos rolagem */
 }
+/* zoom de 200% no celular (Chrome › Configurações › Acessibilidade › Zoom: a tela de 390 px fica com 195 px de largura,
+   a de 360 com 180): nada passa da borda direita nem fica cortado. Só abaixo de 300 px, então o celular sem zoom não muda.
+   Cartão de peça: foto em cima e código, nome e aplicação embaixo, com a largura toda (ao lado da foto sobrava menos que
+   "Mangueira"); o "+" ou o "×" fica no canto, ao lado da foto. */
+@media (max-width: 299px) {
+  .aba-badge { left: auto; right: 0; }
+  .item, .item-com-acao .item { grid-template-columns: minmax(0, 1fr); padding-right: 10px; }
+  .item-seta { display: none; }
+  .item-com-acao > .item-lista, .item-com-acao > .item-remover { top: 13px; margin-top: 0; }
+  .lista-item .item { padding-right: 0; }
+  .lista-item > .item-remover { top: 6px; }
+  .lista-qtd { flex-wrap: wrap; row-gap: 8px; }
+  .qtd-num { width: 48px; }
+  .res-barra { flex-wrap: wrap; }
+  .res-ferramentas { flex: 0 1 auto; flex-wrap: wrap; row-gap: 8px; min-width: 0; } /* ordem e Imprimir: o botão desce quando não cabe */
+  .faixa-instalar .faixa-txt b { white-space: normal; }
+  .instalar-cartao .faixa-txt { flex: 1 0 100%; } /* Início: o texto e "QR code e instruções" com a largura toda, embaixo do ícone */
+  .topo-sub, .detalhe-meta .chip-pequeno { white-space: normal; } /* nome da peça no topo e a linha na ficha quebram em vez de cortar */
+  .detalhe-meta .chip-pequeno { max-width: calc(100% + 8px); text-align: left; } /* +8: a borda transparente */
+  /* título e número lado a lado descem para a linha de baixo quando não cabem; palavra que sozinha não cabe (fonte grande,
+     ou a de reserva enquanto a Barlow não chega) hifeniza ou quebra, em vez de passar da borda */
+  .secao-cab, .grupo-cab { flex-wrap: wrap; }
+  h2, h3, .btn-duplo-txt b, .btn-mini { overflow-wrap: anywhere; hyphens: auto; }
+  /* aplicação: a tabela cabe no cartão; títulos das colunas, motor e anos ficam inteiros (menos espaço entre as letras do
+     título) e o nome do veículo hifeniza ou quebra */
+  .tabela th, .tabela td { padding-right: 4px; }
+  .tabela th:last-child, .tabela td:last-child { padding-right: 0; }
+  .tabela th { letter-spacing: .02em; }
+  .tabela td:first-child { overflow-wrap: anywhere; hyphens: auto; }
+  div:has(> .tabela) { overflow-x: auto; } /* se ainda não couber (fonte de reserva, mais larga), a tabela rola dentro do cartão e a tela não */
+  .recentes .chip-txt { white-space: normal; overflow: visible; max-width: none; } /* "Volkswagen Gol 2010 · 1.6" em duas linhas, sem reticências */
+  /* campos: o texto digitado ou escolhido aparece inteiro.
+     Linha de busca: o campo fica com a linha toda e o Buscar (com o nome) desce para a linha de baixo; onde há microfone, ele
+     sai de dentro do campo e fica ao lado do Buscar (o × continua dentro do campo, com 48 px só para ele) */
+  .busca-linha { flex-wrap: wrap; position: relative; }
+  .busca-linha .entrada-wrap { flex: 1 1 100%; }
+  .busca-linha .btn-buscar { flex: 1 1 auto; width: auto; padding: 0 12px; }
+  .busca-linha .btn-buscar span { display: inline; }
+  .busca-linha .entrada-wrap:has(.btn-voz) { display: contents; }
+  .busca-linha .entrada-wrap:has(.btn-voz) .entrada { flex: 1 1 100%; padding-right: 12px; }
+  .busca-linha .entrada-wrap:has(.btn-voz):has(.limpar:not([hidden])) .entrada { padding-right: 48px; }
+  .busca-linha .entrada-wrap:has(.btn-voz) .limpar { right: 2px; }
+  .busca-linha .btn-voz { position: relative; right: auto; top: auto; flex: 0 0 auto; width: 56px; height: 56px; border: 1.5px solid var(--borda-controle); border-radius: var(--raio-p); background: var(--superficie); }
+  /* placa: letras menores e mais juntas ("ABC1D23" inteira) */
+  .entrada-placa { font-size: min(24px, 11.5vw); letter-spacing: .05em; padding: 0 6px 0 calc(6px + .05em); } /* 180 px: 20,7 px, cabe também com a fonte de reserva */
+  .entrada-placa::placeholder { font-size: 17px; }
+  /* seletores: Ano e Motor um embaixo do outro, menos folga em volta do texto e o que está escolhido quebra em duas linhas
+     em vez de cortar ("Mercedes-Benz", "Escolha a marca primeiro"); os cartões dos campos ficam com 10 px dos lados */
+  .grade-2 { grid-template-columns: minmax(0, 1fr); }
+  .select, .grade-2 .select { height: auto; min-height: 52px; white-space: normal; line-height: 1.2; padding: 7px 28px 7px 10px; }
+  .select-wrap::after, .grade-2 .select-wrap::after { right: 11px; }
+  .cartao:has(.busca-linha, .seletor, .placa-wrap) { padding-left: 10px; padding-right: 10px; }
+}
 @media (display-mode: standalone) {
   .so-navegador { display: none !important; }
 }
@@ -694,8 +790,8 @@ body:not(.rota-inicio):not(.rota-instalar):has(.faixa-instalar:not([hidden])) .t
 
 /* ---------- ficha: ampliar a foto ---------- */
 .detalhe-foto .foto.pode-ampliar.ok { cursor: zoom-in; }
-.btn-ampliar { position: absolute; right: 8px; bottom: 8px; background: var(--superficie); border: 1px solid var(--borda); box-shadow: var(--sombra); color: var(--texto); }
-.btn-ampliar:hover { background: var(--superficie-2); }
+.btn-ampliar { position: absolute; right: 8px; bottom: 8px; background-color: var(--superficie); box-shadow: var(--sombra), inset 0 0 0 1px var(--borda-controle); color: var(--texto); } /* .btn-icone: caixa de 48, quadrado de 44 à vista */
+.btn-ampliar:hover { background-color: var(--superficie-2); }
 .detalhe-foto .foto.sem ~ .btn-ampliar { display: none; }
 
 /* foto em tela cheia: pinça, toque duplo, arrastar; igual nos dois temas (fundo escuro de visualizador) */
@@ -766,7 +862,7 @@ body:not(.rota-inicio):not(.rota-instalar):has(.faixa-instalar:not([hidden])) .t
 .etq-previa .status { margin-top: 10px; }
 .entrada-num { max-width: 160px; }
 .segmentos-largo { display: flex; width: 100%; }
-.link-etiqueta { margin: 2px 0 -8px; }
+.link-acao.link-etiqueta { margin: 0 0 -10px; }
 
 /* ---------- imprimir ou salvar em PDF ----------
    A folha (#impressao) existe só durante a impressão (app.js: montarFolha/limparFolha, body.imprimindo). Preto no branco,

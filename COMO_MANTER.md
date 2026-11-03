@@ -99,12 +99,15 @@ git push origin main
 - Quem já tem o app instalado recebe a barra "Atualização disponível · Atualizar" na próxima vez que abrir
   (ou quando voltar para o app). Tocando em Atualizar, ele recarrega uma vez e confirma "App atualizado · versão …".
   Quem não tocar recebe a versão nova na abertura seguinte. Favoritos, recentes e tema não se perdem.
+- No app do iPhone (e em navegador sem service worker) não aparece a barra: em **Sobre › Procurar atualização**, se
+  houver versão nova, o app recarrega sozinho e confirma "App atualizado · versão …". Se ele disser que a versão nova
+  ainda não chegou, tente de novo daqui a alguns minutos.
 
 ## 4. Como mudar a versão
 A versão tem que mudar a cada publicação, senão o celular continua com os arquivos antigos. São dois lugares, com
 o mesmo texto (formato ano.mês.dia-número):
-- `config.js` → linha `versao: '2026.11.02-33'`
-- `sw.js` → linha `var VERSAO = '2026.11.02-33';`
+- `config.js` → linha `versao: '2026.11.02-34'`
+- `sw.js` → linha `var VERSAO = '2026.11.02-34';`
 Se os dois ficarem diferentes, o teste do item 5 acusa.
 
 ## 5. Como rodar o teste
@@ -113,8 +116,8 @@ Precisa do Node.js e do Playwright com o Chromium (uma vez só: `npm install -g 
 ```
 node teste/fumaca.js
 ```
-Em uns 25 segundos ele percorre o app inteiro (Início, buscas, ficha, favoritos, Minha lista, Imprimir / PDF, etiquetas, busca por voz, compartilhar,
-instalar, apps das lojas, tema claro por padrão, versão, uso sem internet) e termina com `271/271 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
+Em cerca de 1 minuto ele percorre o app inteiro (Início, buscas, ficha, favoritos, Minha lista, Imprimir / PDF, etiquetas, busca por voz, compartilhar,
+instalar, apps das lojas, tema claro por padrão, versão, uso sem internet) e termina com `309/309 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
 Para guardar capturas de tela: `node teste/fumaca.js --capturas pasta_das_capturas`.
 
 ## 6. Onde estão as regras

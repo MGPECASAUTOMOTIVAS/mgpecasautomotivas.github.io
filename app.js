@@ -58,7 +58,21 @@
     return ss('mg-app-loja') === 'android' ? 'android' : '';
   })();
   if (APP_LOJA) { document.documentElement.classList.add('app-loja'); document.documentElement.setAttribute('data-app-loja', APP_LOJA); }
-  function carregar(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + url); return r.json(); }); }
+  /* dados da mesma origem (dados/) vão com a versão do app no endereço (?v=<versão>): sem service worker (app do iPhone,
+     navegador sem SW, 1ª visita), o cache HTTP do navegador fica separado por versão e uma versão nunca recebe dele o arquivo
+     guardado por outra (marcas/*.json e imagens.json apontam para posições de produtos.json); com SW, ele ignora o ?v= */
+  function dadoLocal(u) { return !/^(https?:)?\/\//.test(u); }
+  function urlDado(u) { return dadoLocal(u) ? u + (u.indexOf('?') < 0 ? '?' : '&') + 'v=' + encodeURIComponent(CFG.versao || '') : u; }
+  function controlado() { return !!(navigator.serviceWorker && navigator.serviceWorker.controller); }
+  /* 409 com X-MG-Versao: o service worker não tinha o arquivo desta versão e o servidor já está em outra (sw.js, dadoDaVersao) */
+  function carregar(url) {
+    return fetch(urlDado(url)).then(function (r) {
+      var outra = r.status === 409 && r.headers.get('X-MG-Versao');
+      if (outra) throw erroVersao(outra);
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + url);
+      return r.json();
+    });
+  }
   function plural(n, s, p) { return n + ' ' + (n === 1 ? s : p); }
   function dataBr(d) { return String(d || '').split('-').reverse().join('/'); } /* 2026-11-02 → 02/11/2026 */
   function hojeIso() { var d = new Date(), z = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); }
@@ -403,10 +417,17 @@
   var indice = null, produtos = null, imagens = null, detalhes = null, detalhesGerado = '', porCodigo = {}, cacheMarcas = {}, pDetalhes = null, indiceBusca = null;
   /* uma única carga em andamento: a tela e o aquecimento do idle pedem ao mesmo tempo no 1º acesso e, sem isso,
      indice/produtos/imagens (~340 KB) desciam duas vezes */
-  var pBase = null, pImagens = null, imagensPronto = false;
+  var pBase = null, pIndice = null, pImagens = null, imagensPronto = false;
+  /* indice.json (2 KB) sozinho: o seletor "Buscar pelo veículo" só precisa das marcas e modelos e fica pronto sem
+     esperar produtos.json (39 KB); as variáveis globais continuam sendo preenchidas juntas, em dadosBase */
+  function dadosIndice() {
+    if (indice) return Promise.resolve(indice);
+    if (!pIndice) pIndice = carregar(BASE + 'indice.json').catch(function (e) { pIndice = null; throw e; });
+    return pIndice;
+  }
   function dadosBase() {
     if (indice && produtos) return Promise.resolve();
-    if (!pBase) pBase = Promise.all([carregar(BASE + 'indice.json'), carregar(BASE + 'produtos.json')])
+    if (!pBase) pBase = Promise.all([dadosIndice(), carregar(BASE + 'produtos.json')])
       .then(function (r) {
         indice = r[0]; produtos = r[1];
         produtos.forEach(function (p, i) { porCodigo[p[0].toUpperCase()] = i; });
@@ -432,9 +453,17 @@
     if (!pDetalhes) pDetalhes = carregar(CFG.detalhesUrl || 'dados/detalhes.json').then(function (d) { detalhes = d.itens || d; detalhesGerado = d.gerado || ''; return detalhes; }).catch(function (e) { pDetalhes = null; throw e; });
     return pDetalhes;
   }
+  /* a tabela da marca aponta para posições de produtos.json: sem service worker (que faz essa conferência no lugar do app),
+     ela só vale se o servidor ainda está nesta versão; com uma publicação nova depois que o app abriu, as posições podem
+     ter mudado (erroVersao: o app recarrega com a versão nova) */
   function dadosMarca(marca) {
     if (cacheMarcas[marca]) return Promise.resolve(cacheMarcas[marca]);
-    return carregar(BASE + 'marcas/' + slug(marca) + '.json').then(function (d) { cacheMarcas[marca] = d; return d; });
+    var u = BASE + 'marcas/' + slug(marca) + '.json';
+    var conferir = dadoLocal(u) && !controlado() ? versaoPublicada().catch(function () { return null; }) : null;
+    return Promise.all([carregar(u), conferir]).then(function (r) {
+      if (r[1] && compararVersoes(r[1], CFG.versao) > 0) throw erroVersao(r[1]);
+      cacheMarcas[marca] = r[0]; return r[0];
+    });
   }
   function fotoDe(idx, tamanho) {
     if (!imagens || !imagens.itens) return null;
@@ -458,6 +487,7 @@
 
   /* ---------- componentes ---------- */
   /* fallbackTam: largura da foto menor que entra se a maior falhar (ficha: 640 → 320) */
+  var fotosSemRede = []; /* fotos que falharam sem conexão: carregadas de novo no evento online (pintarOffline, mais abaixo) */
   function fotoEl(idx, alt, tamanho, fallbackTam) {
     var box = el('span', { class: 'foto' });
     if (!imagensPronto) { box.classList.add('aguardando'); box._foto = [idx, alt, tamanho, fallbackTam]; return box; }
@@ -465,13 +495,20 @@
     if (!src) { box.classList.add('sem'); box.appendChild(svg(ICONES.foto)); box.appendChild(el('span', { class: 'sem-txt', text: 'Foto em breve' })); return box; }
     /* largura/altura na proporção real das fotos da loja (1600×880 = 20:11); o tamanho visível vem do CSS */
     var larg = tamanho || 320;
-    var img = el('img', { src: src, alt: alt || '', loading: 'lazy', decoding: 'async', width: String(larg), height: String(Math.round(larg * 11 / 20)) });
-    img.addEventListener('load', function () { img.classList.add('ok'); box.classList.add('ok'); });
-    img.addEventListener('error', function () {
-      if (fallback && img.src !== fallback) { img.src = fallback; return; }
-      img.remove(); box.classList.add('sem'); box.appendChild(svg(ICONES.foto)); box.appendChild(el('span', { class: 'sem-txt', text: 'Sem foto' }));
-    });
-    box.appendChild(img);
+    function montar() {
+      var img = el('img', { src: src, alt: alt || '', loading: 'lazy', decoding: 'async', width: String(larg), height: String(Math.round(larg * 11 / 20)) });
+      img.addEventListener('load', function () { img.classList.add('ok'); box.classList.add('ok'); });
+      img.addEventListener('error', function () {
+        if (fallback && img.src !== fallback) { img.src = fallback; return; }
+        /* sem conexão a peça tem foto, só não está guardada no aparelho: diz isso (e não "Sem foto") e tenta de novo quando a
+           rede volta, na mesma caixa (o que foi preso a ela continua valendo, como o toque que amplia a foto da ficha) */
+        var semRede = navigator.onLine === false;
+        img.remove(); box.classList.add('sem'); box.appendChild(svg(ICONES.foto)); box.appendChild(el('span', { class: 'sem-txt', text: semRede ? 'Sem conexão' : 'Sem foto' }));
+        if (semRede) fotosSemRede.push(function () { if (box.isConnected) { box.classList.remove('sem'); box.textContent = ''; montar(); } });
+      });
+      box.appendChild(img);
+    }
+    montar();
     return box;
   }
   function status(msg, tipo) {
@@ -799,16 +836,18 @@
       aviso,
       el('div', { class: 'campo' }, [btn])
     ]);
-    dadosBase().then(function () {
-      var marcas = Object.keys(indice.marcas).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
+    var marcasIx = {};
+    dadosIndice().then(function (ix) {
+      marcasIx = ix.marcas;
+      var marcas = Object.keys(marcasIx).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
       opcoes(selMarca, marcas, 'Escolha a marca'); selMarca.disabled = false;
-      if (opts.marca && indice.marcas[opts.marca]) { selMarca.value = opts.marca; selMarca.dispatchEvent(new Event('change')); }
+      if (opts.marca && marcasIx[opts.marca]) { selMarca.value = opts.marca; selMarca.dispatchEvent(new Event('change')); }
     }).catch(function () { aviso.innerHTML = ''; aviso.appendChild(status('Não foi possível carregar a lista de veículos. Verifique a conexão e tente de novo.', 'erro')); });
     selMarca.addEventListener('change', function () {
       var m = selMarca.value; aviso.innerHTML = '';
       selAno.disabled = selMotor.disabled = true; opcoes(selAno, [], 'Todos'); opcoes(selMotor, [], 'Todos');
-      if (!m) { opcoes(selModelo, [], 'Escolha a marca primeiro'); selModelo.disabled = true; return; }
-      var modelos = indice.marcas[m].slice().sort(function (a, b) { return a.localeCompare(b, 'pt-BR', { numeric: true }); }), grupos = gruposDeModelos(modelos, m);
+      if (!m || !marcasIx[m]) { opcoes(selModelo, [], 'Escolha a marca primeiro'); selModelo.disabled = true; return; }
+      var modelos = marcasIx[m].slice().sort(function (a, b) { return a.localeCompare(b, 'pt-BR', { numeric: true }); }), grupos = gruposDeModelos(modelos, m);
       if (grupos) { opcoes(selModelo, [], 'Escolha o modelo'); grupos.forEach(function (g) { selModelo.appendChild(el('optgroup', { label: g.rotulo }, g.modelos.map(function (o) { return el('option', { value: o, text: o }); }))); }); }
       else opcoes(selModelo, modelos, 'Escolha o modelo');
       selModelo.disabled = false;
@@ -823,7 +862,7 @@
         var f = faixaAnos(aplsModelo), anos = []; for (var y = f[1]; y >= f[0]; y--) anos.push(String(y));
         opcoes(selAno, anos, 'Todos'); selAno.disabled = false;
         montarMotores();
-      }).catch(function () { aviso.innerHTML = ''; aviso.appendChild(status('Não foi possível carregar os veículos desta marca. Verifique a conexão e tente de novo.', 'erro')); });
+      }).catch(function (e) { aviso.innerHTML = ''; aviso.appendChild(versaoNova(e) ? status(textoVersaoNova('os veículos desta marca'), 'aviso') : status('Não foi possível carregar os veículos desta marca. Verifique a conexão e tente de novo.', 'erro')); });
     });
     /* a lista de motores acompanha o ano escolhido: só os motores das aplicações daquele ano (sem ano = todos) */
     function montarMotores() {
@@ -872,7 +911,9 @@
       /* marca fora do índice (link antigo ou digitado errado): lista vazia, sem pedir marcas/<x>.json (404) nem avisar "verifique a conexão" */
       if (!indice.marcas[f.marca]) return [{}, null];
       /* semDetalhes: o cartão do veículo na busca por texto não espera detalhes.json (a tabela marcas/<marca>.json já traz as aplicações) */
-      return Promise.all([dadosMarca(f.marca), f.semDetalhes || detalhes ? null : dadosDetalhes().catch(function () { return null; })]);
+      /* a linha de cada peça (grupos e filtro de linha) já vem em produtos.json (linhasNoIndice): detalhes.json (78 KB)
+         só é esperado quando os dados ainda não trazem esse campo */
+      return Promise.all([dadosMarca(f.marca), f.semDetalhes || detalhes || linhasNoIndice() ? null : dadosDetalhes().catch(function () { return null; })]);
     }).then(function (r) {
       var d = r[0], apls = d[f.modelo] || [], porProduto = {};
       apls.forEach(function (a) {
@@ -899,14 +940,27 @@
     ordem.sort(function (a, b) { return LINHAS.findIndex(function (l) { return l.id === a; }) - LINHAS.findIndex(function (l) { return l.id === b; }); });
     return ordem.map(function (l) { return { id: l, itens: grupos[l] }; });
   }
+  /* a 1ª tela de cartões (16) entra já e o resto numa tarefa logo depois, no fim da lista (nada do que já está na tela se
+     mexe): no Gol 2010 1.6 (96 peças) a 1ª tela aparece antes. O resto vai de uma vez: em lotes pequenos, cada lote pedia
+     layout e pintura e a lista completa saía ~250 ms mais tarde. Se a lista sai da tela antes (troca de filtro, de ordem
+     ou de tela), o resto não é montado. */
+  var LOTE_1 = 16, LOTE = Infinity;
   function listaAgrupada(itens, item) {
-    var frag = document.createDocumentFragment();
-    gruposPorLinha(itens).forEach(function (g) {
-      frag.appendChild(el('div', { class: 'grupo-cab' }, [el('h3', { text: LINHA_POR_ID[g.id].nome }), el('small', { text: plural(g.itens.length, 'peça', 'peças') })]));
-      var ul = el('ul', { class: 'lista' });
-      g.itens.forEach(function (it) { ul.appendChild(item(it)); });
-      frag.appendChild(ul);
-    });
+    var frag = document.createDocumentFragment(), grupos = gruposPorLinha(itens), gi = 0, ii = 0, ul = null, pai = frag;
+    function lote(n) {
+      while (gi < grupos.length && n > 0) {
+        var g = grupos[gi];
+        if (ii === 0) {
+          pai.appendChild(el('div', { class: 'grupo-cab' }, [el('h3', { text: LINHA_POR_ID[g.id].nome }), el('small', { text: plural(g.itens.length, 'peça', 'peças') })]));
+          ul = el('ul', { class: 'lista' }); pai.appendChild(ul);
+        }
+        for (; ii < g.itens.length && n > 0; ii++, n--) ul.appendChild(item(g.itens[ii]));
+        if (ii >= g.itens.length) { gi++; ii = 0; }
+      }
+      return gi < grupos.length;
+    }
+    function seguir() { if (!ul || !ul.isConnected) return; pai = ul.parentNode; lote(LOTE); }
+    if (lote(LOTE_1)) setTimeout(seguir, 0);
     return frag;
   }
 
@@ -1756,7 +1810,9 @@
   document.addEventListener('visibilitychange', function () { if (document.hidden) pararVoz(); });
   function ligarVoz(o) {
     var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    var estado = el('p', { class: 'voz-estado', role: 'status', 'aria-live': 'polite', hidden: true });
+    /* região viva sempre presente (vazia em repouso, sem altura): o leitor de tela anuncia o "Ouvindo…" quando o texto entra;
+       se ela nascesse escondida junto com o texto, o anúncio podia não sair */
+    var estado = el('p', { class: 'voz-estado', role: 'status', 'aria-live': 'polite' });
     var txtAviso = el('p', { tabindex: '-1', text: 'A busca por voz usa o serviço de reconhecimento de fala do navegador (no Chrome, o Google): o que você falar vai para esse serviço enquanto o microfone estiver ligado. O app não guarda nem envia o áudio a nenhum outro lugar.' });
     var btnNao = el('button', { type: 'button', class: 'btn btn-mini btn-neutro', text: 'Agora não' });
     var btnSim = el('button', { type: 'button', class: 'btn btn-mini btn-primario', text: 'Entendi, usar' });
@@ -1767,7 +1823,7 @@
       o.wrap.classList.toggle('ouvindo', sim);
       o.botao.setAttribute('aria-pressed', sim ? 'true' : 'false');
       o.botao.setAttribute('aria-label', sim ? 'Parar de ouvir' : 'Buscar por voz'); o.botao.title = sim ? 'Parar de ouvir' : 'Buscar por voz';
-      estado.hidden = !sim; estado.textContent = sim ? 'Ouvindo… fale o código, o número original ou o nome da peça com o carro. Toque no microfone para parar.' : '';
+      estado.textContent = sim ? 'Ouvindo… fale o código, o número original ou o nome da peça com o carro. Toque no microfone para parar.' : '';
       if (sim) { o.input.placeholder = 'Ouvindo…'; o.limpar.hidden = true; } else { o.input.placeholder = 'Código, nº original ou nome'; o.limpar.hidden = !o.input.value; }
     }
     function terminar(msg) {
@@ -1992,12 +2048,16 @@
     var node = el('div', {}, [cab, res]);
     mostrar(node);
     res.appendChild(esqueleto(5));
-    dadosBase().then(function () { return dadosMarca(marca); }).then(function (d) {
-      if (!node.isConnected) return;
-      filtros.appendChild(chipsVeiculo({ marca: marca, modelo: modelo, ano: ano, motor: motor, cil: cil, linha: linha }, d[modelo] || []));
-    }).catch(function () {});
+    /* chips de ano e motor entram junto com a lista, na mesma tarefa, e a lista vai para um bloco novo no lugar do
+       esqueleto: nada do que já estava na tela muda de lugar (antes os chips entravam antes e empurravam o esqueleto,
+       CLS 0,17 no 3G); buscarVeiculo já carregou marcas/<marca>.json quando chega aqui */
+    function pintarChips() {
+      var d = cacheMarcas[marca];
+      if (d && !filtros.firstChild) filtros.appendChild(chipsVeiculo({ marca: marca, modelo: modelo, ano: ano, motor: motor, cil: cil, linha: linha }, d[modelo] || []));
+      var novo = el('div'); res.replaceWith(novo); res = novo;
+    }
     buscarVeiculo({ marca: marca, modelo: modelo, ano: ano, motor: motor, cil: cil }).then(function (itens) {
-      res.innerHTML = '';
+      pintarChips();
       /* em Recentes vai só marca, modelo, ano e motor (nunca a placa nem a descrição da consulta) */
       if (indice.marcas[marca] && indice.marcas[marca].indexOf(modelo) >= 0) guardarRecente({ marca: marca, modelo: modelo, ano: ano, motor: motor });
       if (!itens.length) {
@@ -2038,7 +2098,11 @@
           url: urlApp(hashFolha)
         };
       };
-    }).catch(function (e) { res.innerHTML = ''; res.appendChild(status('Não foi possível carregar as peças deste veículo. Verifique a conexão.', 'erro')); console.error(e); });
+    }).catch(function (e) {
+      pintarChips();
+      if (versaoNova(e)) { res.appendChild(status(textoVersaoNova('as peças deste veículo'), 'aviso')); return; }
+      res.appendChild(status('Não foi possível carregar as peças deste veículo. Verifique a conexão.', 'erro')); console.error(e);
+    });
   }
   /* chips de ano e de motor nos resultados por veículo; cada chip é um link da mesma busca com o filtro trocado.
      Ano: as listas são longas (Gol: 49 anos), então aparecem só ±6 anos ao redor do escolhido (ou do ano mediano das
@@ -2558,14 +2622,28 @@
     var instalarBtn = APP_LOJA ? null : el('button', { type: 'button', class: 'btn btn-contorno so-navegador' }, [svg(ICONES.instalar), 'Instalar app no celular']);
     if (instalarBtn) instalarBtn.addEventListener('click', pedirInstalacao);
     var btnVerificar = el('button', { type: 'button', class: 'btn btn-neutro btn-mini' }, [svg(ICONES.atualizar), 'Procurar atualização']);
+    function fimVerificar() { btnVerificar.disabled = false; btnVerificar.classList.remove('carregando'); }
     btnVerificar.addEventListener('click', function () {
+      /* sem conexão nenhuma (o aparelho sabe): avisa na hora, sem ir à rede à toa */
+      if (navigator.onLine === false) { toast('Não foi possível verificar agora. Confira a conexão.'); return; }
       btnVerificar.disabled = true; btnVerificar.classList.add('carregando');
-      verificarAtualizacao(true).then(function (r) {
+      /* com service worker, o caminho de sempre (barra "Atualização disponível"); sem ele, confere a versão publicada (procurarSemSW) */
+      verificarAtualizacao(true).then(function (r) { return r === 'sem-sw' ? procurarSemSW() : r; }).then(function (r) {
+        if (r === 'recarregando') return; /* a versão nova está chegando: a página recarrega sozinha e o botão segue girando */
         if (r === 'nova') toast('Atualização encontrada: toque em Atualizar.');
-        else if (r === 'sem-sw') toast('A atualização automática não está disponível neste navegador.');
         else toast('Você já está na versão mais recente.');
-      }).catch(function () { toast('Não foi possível verificar agora. Confira a conexão.'); }).then(function () { btnVerificar.disabled = false; btnVerificar.classList.remove('carregando'); });
+        fimVerificar();
+      }, function () { toast('Não foi possível verificar agora. Confira a conexão.'); fimVerificar(); });
     });
+    /* o texto embaixo diz o que de fato acontece neste aparelho: com service worker o app procura sozinho; sem ele, só pelo botão */
+    var TXT_COM_SW = 'O app procura atualização ao abrir e ao voltar para a tela; quando há uma nova, aparece a barra "Atualização disponível".';
+    var TXT_SEM_SW = 'Toque em Procurar atualização para conferir se há uma versão nova; se houver, o app recarrega com ela.';
+    var ajudaAtualizacao = el('p', { class: 'ajuda ajuda-atualizacao', text: temSW && (regSW || navigator.serviceWorker.controller) ? TXT_COM_SW : TXT_SEM_SW });
+    /* 1ª visita: o SW só se registra depois do load; quando ele fica ativo, o texto passa a ser o de quem tem SW */
+    if (temSW && !regSW) {
+      navigator.serviceWorker.getRegistration().then(function (reg) { ajudaAtualizacao.textContent = reg ? TXT_COM_SW : TXT_SEM_SW; }).catch(function () {});
+      navigator.serviceWorker.ready.then(function () { ajudaAtualizacao.textContent = TXT_COM_SW; }).catch(function () {});
+    }
     var node = el('div', {}, [
       el('section', { class: 'cartao', style: 'text-align:center' }, [
         el('img', { class: 'sobre-logo', src: logoSrc(), alt: 'MG Peças Automotivas', width: '708', height: '267' }),
@@ -2592,7 +2670,7 @@
           el('div', {}, [el('span', { class: 'rotulo', text: 'Versão do app' }), el('b', { text: CFG.versao || '—' }), el('p', { class: 'ajuda dados-info', text: 'Dados do catálogo: carregando…' })]),
           btnVerificar
         ]),
-        el('p', { class: 'ajuda', text: 'O app procura atualização ao abrir e ao voltar para a tela; quando há uma nova, aparece a barra "Atualização disponível".' })
+        ajudaAtualizacao
       ]),
       el('p', { class: 'nota-legal', text: 'MG Peças Automotivas · Diadema-SP' })
     ]);
@@ -2738,6 +2816,7 @@
     avisoOffline.appendChild(document.createTextNode(em ? 'Sem conexão · dados guardados em ' + dataBr(em) : 'Sem conexão · usando os dados guardados no aparelho'));
   }
   window.addEventListener('online', pintarOffline);
+  window.addEventListener('online', function () { var l = fotosSemRede; fotosSemRede = []; l.forEach(function (f) { f(); }); });
   window.addEventListener('offline', pintarOffline);
   pintarOffline();
 
@@ -2831,22 +2910,109 @@
     swEsperando.postMessage({ tipo: 'pular' }); avisoAtualizar.hidden = true; toast('Atualizando…');
     ss('mg-atualizou', CFG.versao || '?'); /* versão que estava rodando: depois da recarga, o toast só sai se ela mudou */
   });
-  /* devolve 'nova' (já há um SW esperando), 'ok' (nada novo), 'sem-sw'; com `forcar`, ignora a espera de 1 minuto */
+  /* devolve 'nova' (já há um SW esperando), 'ok' (nada novo), 'sem-sw'; com `forcar`, ignora a espera de 1 minuto.
+     Antes de o registro terminar (o app registra o SW no load), usa o registro que já existe de uma visita anterior;
+     sem registro nenhum (navegador sem service worker, bloqueado ou modo privado), 'sem-sw' */
   function verificarAtualizacao(forcar) {
-    if (!temSW || !regSW) return Promise.resolve('sem-sw');
-    if (!forcar && Date.now() - ultimaVerificacao < 60000) return Promise.resolve(regSW.waiting ? 'nova' : 'ok');
-    ultimaVerificacao = Date.now();
-    return regSW.update().then(function () {
-      return new Promise(function (ok) {
-        /* dá um tempo para o SW novo (se houver) terminar de instalar */
-        var tentativas = 0; (function espera() { if (regSW.waiting || (regSW.installing && ++tentativas < 40)) { if (regSW.waiting) return ok('nova'); return setTimeout(espera, 250); } ok(regSW.waiting ? 'nova' : 'ok'); })();
+    if (!temSW) return Promise.resolve('sem-sw');
+    return (regSW ? Promise.resolve(regSW) : navigator.serviceWorker.getRegistration().catch(function () { return null; })).then(function (reg) {
+      if (!reg) return 'sem-sw';
+      if (!forcar && Date.now() - ultimaVerificacao < 60000) return reg.waiting ? 'nova' : 'ok';
+      ultimaVerificacao = Date.now();
+      return reg.update().then(function () {
+        return new Promise(function (ok) {
+          /* dá um tempo para o SW novo (se houver) terminar de instalar */
+          var tentativas = 0; (function espera() { if (reg.waiting || (reg.installing && ++tentativas < 40)) { if (reg.waiting) return ok('nova'); return setTimeout(espera, 250); } ok(reg.waiting ? 'nova' : 'ok'); })();
+        });
       });
     });
+  }
+  /* ---------- atualização sem service worker ----------
+     No app do iPhone (WKWebView, que pode não ter service worker) e em navegador sem service worker (modo privado, bloqueado),
+     "Procurar atualização" lê a versão publicada em config.js direto do servidor (endereço único e cache: 'no-store', sem
+     passar por cache nenhum) e compara com a que está rodando (CFG.versao). Se a publicada é mais nova, revalida no servidor
+     cada arquivo que esta página usou (cache: 'no-cache': 304 quando não mudou), para o cache do navegador ficar só com a
+     versão nova — nenhuma tela mistura arquivo velho com novo —, e recarrega uma vez; depois da recarga, o toast confirma
+     "App atualizado · versão …" (ou avisa que a nova ainda não chegou). Igual ou mais antiga (logo depois de publicar, o
+     servidor pode responder com a cópia anterior por alguns minutos): "Você já está na versão mais recente." */
+  function versaoPublicada() {
+    return fetch('config.js?versao=' + Date.now(), { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }).then(function (t) {
+      var m = /versao\s*:\s*['"]([^'"]+)['"]/.exec(t);
+      if (!m) throw new Error('config.js sem versão');
+      return m[1];
+    });
+  }
+  /* '2026.11.02-33' < '2026.11.02-34' < '2026.11.03-1' (data, depois o número); maior que 0 quando a é mais nova que b */
+  function compararVersoes(a, b) {
+    function partes(v) { var m = /^(\d+)\.(\d+)\.(\d+)-(\d+)$/.exec(String(v || '').trim()); return m ? m.slice(1).map(Number) : null; }
+    var x = partes(a), y = partes(b);
+    if (!x || !y) return a === b ? 0 : (!b || String(a) > String(b) ? 1 : -1);
+    for (var i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] - y[i];
+    return 0;
+  }
+  /* arquivos da casca que esta página carregou: são eles que o cache do navegador pode estar guardando no endereço de sempre
+     (os dados vão com ?v=<versão>, urlDado: a versão nova pede outros endereços e nunca recebe os da anterior) */
+  function arquivosCarregados() {
+    var l = ['./', 'index.html', 'config.js', 'app.css', 'app.js', 'manifest.webmanifest'];
+    if (window.MG_QR) l.push('qr.js');
+    return l;
+  }
+  /* recarrega com a versão nova: revalida no servidor a casca que esta página usou e recarrega uma vez, com o aviso à vista
+     por pelo menos 1,2 s (na rede rápida a revalidação terminava antes de ele aparecer e a pessoa só via a tela piscar) */
+  var atualizandoSemSW = false;
+  function atualizarSemSW(nova) {
+    if (atualizandoSemSW) return; atualizandoSemSW = true;
+    toast('Versão nova encontrada (' + nova + '). Atualizando…');
+    ss('mg-atualizou', CFG.versao || '?'); ss('mg-atualizando', nova); /* depois da recarga: confirma ou avisa (fim do arquivo) */
+    var fila = arquivosCarregados(), i = 0;
+    function proximo() {
+      if (i >= fila.length) return Promise.resolve();
+      return fetch(fila[i++], { cache: 'no-cache' }).then(function (r) { return r.arrayBuffer(); }).catch(function () {}).then(proximo);
+    }
+    Promise.all([proximo(), proximo(), proximo(), proximo(), new Promise(function (ok) { setTimeout(ok, 1200); })]).then(function () { location.reload(); });
+  }
+  function procurarSemSW() {
+    return versaoPublicada().then(function (nova) {
+      if (compararVersoes(nova, CFG.versao) <= 0) return 'ok';
+      atualizarSemSW(nova);
+      return 'recarregando';
+    });
+  }
+  /* ---------- versão nova publicada com o app aberto ----------
+     O servidor passou a ter outra versão depois que o app abriu: um arquivo de dados que ainda não estava no aparelho viria
+     da publicação nova e não combina com os desta (marcas/*.json aponta para posições de produtos.json). Nada é misturado:
+     a tela diz que o catálogo foi atualizado; com service worker aparece a barra "Atualização disponível"
+     (verificarAtualizacao) e, sem ele, o app recarrega com a versão nova (atualizarSemSW). Uma vez por abertura. */
+  var versaoNovaVista = false;
+  function erroVersao(v) {
+    var e = new Error('versão ' + v + ' publicada depois que o app abriu'); e.versaoNova = v;
+    if (compararVersoes(v, CFG.versao) > 0) {
+      if (!controlado()) { if (!naoChegouAinda(v)) atualizarSemSW(v); }
+      else if (!versaoNovaVista) { versaoNovaVista = true; verificarAtualizacao(true).catch(function () {}); }
+    }
+    return e;
+  }
+  /* sem service worker, a recarga pode não trazer a versão nova (o servidor ainda entrega a anterior por alguns minutos):
+     então, por um minuto, o app não recarrega sozinho de novo para ela (sem isso, cada marca aberta recarregaria a tela);
+     "Procurar atualização" continua tentando na hora */
+  function naoChegouAinda(v) {
+    var x = String(ss('mg-nao-chegou') || '').split(' ');
+    return x.length === 2 && compararVersoes(v, x[0]) <= 0 && Date.now() - Number(x[1]) < 60000;
+  }
+  /* o erro é de versão nova, e não de conexão: a tela troca o "verifique a conexão" pelo aviso de atualização */
+  function versaoNova(e) { return !!(e && e.versaoNova && compararVersoes(e.versaoNova, CFG.versao) > 0); }
+  function textoVersaoNova(oque) {
+    if (controlado()) return 'O catálogo foi atualizado depois que o app abriu. Toque em Atualizar para ver ' + oque + '.';
+    return atualizandoSemSW ? 'O catálogo foi atualizado. Abrindo a versão nova…' : 'O catálogo foi atualizado e a versão nova ainda não chegou a este aparelho. Tente de novo daqui a alguns minutos.';
   }
   if (temSW) {
     window.addEventListener('load', function () {
       var tinhaControlador = !!navigator.serviceWorker.controller;
       navigator.serviceWorker.register('sw.js').then(function (reg) {
+        if (!reg) return;
         regSW = reg; ultimaVerificacao = Date.now();
         if (reg.waiting && navigator.serviceWorker.controller) avisarAtualizacao(reg.waiting);
         reg.addEventListener('updatefound', function () {
@@ -2855,7 +3021,12 @@
         });
       }).catch(function (e) { console.warn('SW', e); });
       var recarregou = false;
-      navigator.serviceWorker.addEventListener('controllerchange', function () { if (recarregou || !tinhaControlador) return; recarregou = true; location.reload(); });
+      /* 1ª visita: a 1ª troca é o SW assumindo a página (clients.claim), nada a recarregar; a partir daí, toda troca é versão
+         nova (Atualizar, aqui ou em outra aba) e recarrega, também nesta mesma visita (antes ficava a página velha com o SW novo) */
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!tinhaControlador) { tinhaControlador = true; return; }
+        if (recarregou) return; recarregou = true; location.reload();
+      });
       document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') verificarAtualizacao(false).catch(function () {}); });
     });
   }
@@ -2865,8 +3036,13 @@
   renderizar();
   /* recarregou pelo "Atualizar": confirma com a versão que está rodando, uma vez só (a marca da sessão é apagada) e só se a
      versão de fato mudou (recarga sem SW novo, ou a marca presa por um controllerchange que não veio, não avisa nada) */
-  var versaoAntes = ss('mg-atualizou');
-  if (versaoAntes) { ss('mg-atualizou', null); if (versaoAntes !== (CFG.versao || '?')) toast('App atualizado · versão ' + (CFG.versao || '')); }
+  var versaoAntes = ss('mg-atualizou'), versaoEsperada = ss('mg-atualizando');
+  if (versaoAntes) {
+    ss('mg-atualizou', null); ss('mg-atualizando', null);
+    if (versaoAntes !== (CFG.versao || '?')) { ss('mg-nao-chegou', null); toast('App atualizado · versão ' + (CFG.versao || '')); }
+    /* sem service worker: a versão nova foi encontrada, mas o servidor ainda entregou a anterior (naoChegouAinda) */
+    else if (versaoEsperada) { ss('mg-nao-chegou', versaoEsperada + ' ' + Date.now()); toast('A versão nova ainda não chegou a este aparelho. Tente de novo daqui a alguns minutos.'); }
+  }
   /* detalhes.json só depois da 1ª tela; em seguida pede ao SW para guardar detalhes e marcas para o uso offline
      (pré-cache enxuto na instalação; nada disso quando o aparelho está em economia de dados) */
   function aquecerOffline() {

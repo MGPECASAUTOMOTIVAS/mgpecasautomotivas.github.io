@@ -14,15 +14,30 @@ if (capturas) fs.mkdirSync(capturas, { recursive: true });
 
 var TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.md': 'text/markdown; charset=utf-8' };
+/* "versão nova publicada" (testes de atualização): com srv.versaoNova, config.js e sw.js saem com essa versão, e index.html,
+   app.js e app.css levam uma marca dela, para conferir que nenhuma tela junta arquivos de versões diferentes */
+function comVersao(txt, p, v) {
+  if (p === '/config.js') return txt.replace(/versao:\s*'[^']+'/, "versao: '" + v + "'");
+  if (p === '/sw.js') return txt.replace(/var VERSAO = '[^']+'/, "var VERSAO = '" + v + "'");
+  if (p === '/app.js') return txt + '\nwindow.__versaoJs = ' + JSON.stringify(v) + ';\n';
+  if (p === '/app.css') return txt + '\n:root { --versao-css: "' + v + '"; }\n';
+  if (p === '/index.html') return txt.replace('<head>', '<head>\n<meta name="versao-html" content="' + v + '">');
+  if (p === '/dados/detalhes.json') return txt.replace(/"gerado":"[^"]*"/, '"gerado":"' + v + '"'); /* dados da publicação nova */
+  return txt;
+}
 function servidor() {
   var srv = http.createServer(function (req, res) {
     var p = decodeURIComponent(req.url.split('?')[0]);
+    srv.urls.push(req.url);
     if (p.endsWith('/')) p += 'index.html';
     var arq = path.join(APP, p);
     if (arq.indexOf(APP) !== 0 || !fs.existsSync(arq) || fs.statSync(arq).isDirectory()) { res.writeHead(404); res.end('404'); return; }
-    res.writeHead(200, { 'Content-Type': TIPOS[path.extname(arq)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    /* srv.maxAge: os dados com max-age=600, como no GitHub Pages (o cache HTTP do navegador guarda a cópia por 10 min) */
+    res.writeHead(200, { 'Content-Type': TIPOS[path.extname(arq)] || 'application/octet-stream', 'Cache-Control': srv.maxAge && /^\/dados\//.test(p) ? 'max-age=600' : 'no-cache' });
+    if (srv.versaoNova && /^\/(index\.html|config\.js|sw\.js|app\.js|app\.css|dados\/detalhes\.json)$/.test(p)) { res.end(comVersao(fs.readFileSync(arq, 'utf8'), p, srv.versaoNova)); return; }
     fs.createReadStream(arq).pipe(res);
   });
+  srv.urls = []; srv.versaoNova = null; srv.maxAge = false;
   var conexoes = new Set();
   srv.on('connection', function (c) { conexoes.add(c); c.on('close', function () { conexoes.delete(c); }); });
   srv.derrubar = function () { return new Promise(function (ok) { conexoes.forEach(function (c) { c.destroy(); }); srv.close(function () { ok(); }); }); };
@@ -48,6 +63,10 @@ function rotas(ctx) {
     if (/fonts\.(googleapis|gstatic)\.com/.test(u)) return route.fulfill({ status: 200, contentType: 'text/css', body: '' });
     return route.abort();
   });
+}
+/* lista agrupada por linha: a 1ª tela de cartões entra já e o resto em lotes logo depois (listaAgrupada); espera todos */
+function listaCompleta(page) {
+  return page.waitForFunction(function () { var b = document.querySelector('#conteudo .painel-res .res-cont b'); return b && document.querySelectorAll('#conteudo .painel-res .item-cod').length === +b.textContent; }, null, { timeout: 15000 });
 }
 /* muda o hash e espera a tela nova (o conteúdo antigo recebe data-velho para não ser confundido com o novo) */
 async function ir(page, hash, seletor) {
@@ -263,7 +282,7 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   ok(cartaoVeic, 'cartão "Ver peças para Volkswagen Gol" acima dos resultados');
   igual(await page.textContent('#conteudo .topo-sub, .topo .topo-sub'), '“mangueria radiador gol”', 'termo no topo');
   var xRes = await page.evaluate(function () { var i = document.querySelector('#conteudo .busca-linha .entrada'); return { nativo: getComputedStyle(i, '::-webkit-search-cancel-button').webkitAppearance, limpar: document.querySelectorAll('#conteudo .busca-linha .limpar:not([hidden])').length, pad: getComputedStyle(i).paddingRight, voz: !!document.querySelector('#conteudo .busca-linha .btn-voz') }; });
-  ok(xRes.nativo === 'none' && xRes.limpar === 1 && xRes.pad === (xRes.voz ? '92px' : '48px'), 'resultados: um × só no campo (o nativo escondido), com espaço para ele' + (xRes.voz ? ' e para o microfone' : ''));
+  ok(xRes.nativo === 'none' && xRes.limpar === 1 && xRes.pad === (xRes.voz ? '96px' : '48px'), 'resultados: um × só no campo (o nativo escondido), com espaço para ele' + (xRes.voz ? ' e para o microfone' : ''));
   /* voltar da ficha para a lista: a lista reabre na mesma posição */
   await page.evaluate(function () { document.querySelectorAll('#conteudo .lista .item')[3].scrollIntoView({ block: 'center' }); }); await page.waitForTimeout(150);
   var yLista = await page.evaluate(function () { return window.scrollY; });
@@ -496,9 +515,9 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   ok(folhaF && folhaF.oem === dMG001.o.join('   ') && folhaF.link === 'https://mgpecasautomotivas.github.io/p/MG001.html' && folhaF.qr, 'ficha: números originais, link da prévia p/MG001.html e QR code');
   ok(folhaF && !PROIBIDO.test(folhaF.texto) && folhaF.docTitle === 'Ficha da peça MG001 · MG Peças', 'ficha: folha sem valores nem contato; nome do PDF "Ficha da peça MG001"');
   /* veículo: botão ao lado da ordem (só o ícone no celular), todas as peças na ordem da tela, filtro e ordem respeitados */
-  await ir(page, '#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.res-barra .btn-imprimir');
-  var btnV = await page.evaluate(function () { var b = document.querySelector('#conteudo .res-barra .btn-imprimir'), r = b.getBoundingClientRect(), s = document.querySelector('#conteudo .res-barra .select-mini').getBoundingClientRect(); return { w: r.width, h: r.height, label: b.getAttribute('aria-label'), txt: getComputedStyle(b.querySelector('.btn-imprimir-txt')).display, mesmaLinha: Math.abs(r.top - s.top) < 4 && r.left > s.right, total: +document.querySelector('#conteudo .res-cont b').textContent, cods: Array.prototype.map.call(document.querySelectorAll('#conteudo .painel-res .item-cod'), function (e) { return e.textContent; }) }; });
-  ok(btnV.w >= 44 && btnV.h >= 44 && btnV.label === 'Imprimir / PDF' && btnV.txt === 'none' && btnV.mesmaLinha, 'veículo: botão de 44 px só com o ícone (nome acessível "Imprimir / PDF") ao lado da ordem');
+  await ir(page, '#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.res-barra .btn-imprimir'); await listaCompleta(page);
+  var btnV =await page.evaluate(function () { var b = document.querySelector('#conteudo .res-barra .btn-imprimir'), r = b.getBoundingClientRect(), s = document.querySelector('#conteudo .res-barra .select-mini').getBoundingClientRect(); return { w: r.width, h: r.height, label: b.getAttribute('aria-label'), txt: getComputedStyle(b.querySelector('.btn-imprimir-txt')).display, mesmaLinha: Math.abs(r.top - s.top) < 4 && r.left > s.right, total: +document.querySelector('#conteudo .res-cont b').textContent, cods: Array.prototype.map.call(document.querySelectorAll('#conteudo .painel-res .item-cod'), function (e) { return e.textContent; }) }; });
+  ok(btnV.w >= 48 && btnV.h >= 48 && btnV.label === 'Imprimir / PDF' && btnV.txt === 'none' && btnV.mesmaLinha, 'veículo: botão só com o ícone, área de toque de 48 px (nome acessível "Imprimir / PDF"), ao lado da ordem');
   await page.evaluate(function () { window.__imprimiu = 0; });
   await page.click('#conteudo .res-barra .btn-imprimir');
   var folhaV = await lerFolha();
@@ -506,8 +525,8 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   ok(folhaV && folhaV.linhas === btnV.total && btnV.total > 30 && folhaV.cods.join(',') === btnV.cods.join(','), 'veículo: todas as ' + btnV.total + ' peças (não só a 1ª página), na ordem da tela');
   ok(folhaV && folhaV.l1[2] === 'Mangueiras do Filtro de Ar' && /\d{4}/.test(folhaV.l1[3]) && folhaV.qr && folhaV.link === 'https://mgpecasautomotivas.github.io/#/veiculo/Volkswagen/Gol/2010?motor=1.6' && !PROIBIDO.test(folhaV.texto), 'veículo: linha e aplicação (motor/anos) por peça, QR com o link desta busca, sem valores');
   await page.click('#conteudo .filtro-linhas .chip >> nth=1'); /* Mangueiras do Filtro de Ar */
-  await page.selectOption('#conteudo .res-barra .select-mini', 'codigo');
-  var telaVF = await page.evaluate(function () { return { total: +document.querySelector('#conteudo .res-cont b').textContent, cods: Array.prototype.map.call(document.querySelectorAll('#conteudo .painel-res .item-cod'), function (e) { return e.textContent; }), folha: !!document.getElementById('impressao') }; });
+  await page.selectOption('#conteudo .res-barra .select-mini', 'codigo'); await listaCompleta(page);
+  var telaVF =await page.evaluate(function () { return { total: +document.querySelector('#conteudo .res-cont b').textContent, cods: Array.prototype.map.call(document.querySelectorAll('#conteudo .painel-res .item-cod'), function (e) { return e.textContent; }), folha: !!document.getElementById('impressao') }; });
   await page.click('#conteudo .res-barra .btn-imprimir');
   var folhaVF = await lerFolha();
   ok(folhaVF && folhaVF.titulo === 'Peças MG para Volkswagen Gol 2010 1.6 · Mangueiras do Filtro de Ar' && folhaVF.linhas === telaVF.total && folhaVF.cods.join(',') === telaVF.cods.join(',') && folhaVF.link === 'https://mgpecasautomotivas.github.io/#/veiculo/Volkswagen/Gol/2010?motor=1.6&linha=filtro-ar', 'veículo filtrado por linha e em ordem de código: título com a linha, ' + telaVF.total + ' peças na ordem da tela, link com ?linha=');
@@ -766,7 +785,125 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await ir(p360, '#/peca/MG046', 'table.tabela');
   var emPe = await p360.evaluate(function () { var f = document.querySelector('#conteudo .detalhe-foto').getBoundingClientRect(), c = document.querySelector('#conteudo .detalhe-cod').getBoundingClientRect(); return [Math.round(f.bottom), Math.round(c.top)]; });
   ok(emPe[1] >= emPe[0] + 12, 'em pé a foto continua acima do código (' + emPe.join(' → ') + ')');
-  await p360.evaluate(function () { localStorage.removeItem('mg-lista'); });
+  console.log('\nAcessibilidade: área de toque, regiões vivas e zoom de 200%');
+  /* área de toque (Google Play: 48 × 48 dp): a caixa de cada controle visível, que é o que o relatório do Play e o leitor
+     de tela medem (a parte desenhada pode continuar menor: borda transparente em volta, app.css) */
+  function alvosMenores() {
+    var sel = 'a[href], button, input:not([type=hidden]), select, textarea, summary, [role=button], [role=tab], [tabindex]:not([tabindex="-1"])';
+    return Array.prototype.filter.call(document.querySelectorAll(sel), function (e) {
+      if (e.closest('[hidden], #impressao, [inert]')) return false;
+      var d = e.closest('details'); if (d && !d.open && e.tagName !== 'SUMMARY') return false;
+      var cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden' || cs.pointerEvents === 'none') return false;
+      var r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (r.width < 47.5 || r.height < 47.5);
+    }).map(function (e) { var r = e.getBoundingClientRect(); return e.tagName.toLowerCase() + '.' + String(e.className).trim().split(/\s+/)[0] + ' ' + Math.round(r.width) + '×' + Math.round(r.height) + ' "' + (e.getAttribute('aria-label') || e.textContent || '').trim().slice(0, 24) + '"'; });
+  }
+  await p360.evaluate(function () { localStorage.setItem('mg-favoritos', JSON.stringify(['MG001', 'MG076'])); });
+  var telasA11y = telas.concat([['#/linhas', '.grade-linhas'], ['#/linha/filtro-ar', '.lista .item-cod'], ['#/minhas', '.lista .item-cod'], ['#/placa', '.btn-amarelo'], ['#/busca', '.seletor select']]);
+  var menores = [];
+  for (k = 0; k < telasA11y.length; k++) {
+    await ir(p360, telasA11y[k][0], telasA11y[k][1]);
+    if (/veiculo/.test(telasA11y[k][0])) await listaCompleta(p360);
+    (await p360.evaluate(alvosMenores)).forEach(function (x) { menores.push(telasA11y[k][0] + ' ' + x); });
+  }
+  ok(!menores.length, 'área de toque de 48 × 48 px ou mais em todos os controles das ' + telasA11y.length + ' telas' + (menores.length ? ': ' + menores.slice(0, 8).join(' | ') : ''));
+  /* regiões vivas sempre presentes: o aviso (toast) e a troca de tela são anunciados quando o texto entra nelas */
+  var vivas = await p360.evaluate(function () { var t = document.getElementById('toast').parentNode, a = document.getElementById('anuncio'); return [t.getAttribute('role'), t.getAttribute('aria-live'), t.hidden, t === document.body, a.getAttribute('role'), a.getAttribute('aria-live')]; });
+  ok(vivas[0] === 'status' && vivas[1] === 'polite' && !vivas[2] && !vivas[3] && vivas[4] === 'status' && vivas[5] === 'polite', 'toast dentro de uma região viva sempre presente (role=status, aria-live=polite), e o anúncio da tela também (' + vivas.join(',') + ')');
+  /* zoom de 200% no celular (Chrome › Acessibilidade › Zoom): 390 vira 195 px de largura e 360 vira 180 */
+  for (var zl of [195, 180]) {
+    await p360.setViewportSize({ width: zl, height: Math.round(zl * 844 / 390) });
+    var rolam = [];
+    for (k = 0; k < telasA11y.length; k++) {
+      await ir(p360, telasA11y[k][0], telasA11y[k][1]);
+      var lz = await p360.evaluate(function () { return [document.documentElement.scrollWidth, document.documentElement.clientWidth]; });
+      if (lz[0] > lz[1]) rolam.push(telasA11y[k][0] + ' ' + lz.join('/'));
+    }
+    ok(!rolam.length, 'zoom de 200% (' + zl + ' px, celular de ' + zl * 2 + '): nenhuma das ' + telasA11y.length + ' telas rola na horizontal' + (rolam.length ? ' (' + rolam.join(', ') + ')' : ''));
+    /* campos inteiros a 200%: o campo de busca (com o × e, onde há, o microfone) deixa espaço para o texto; a placa mostra
+       "ABC1D23" inteira; nos seletores de veículo nenhuma palavra do que está escolhido fica cortada */
+    var cortes = [];
+    for (var cz of [['#/', '.secao-busca .entrada'], ['#/busca?q=mangueira%20radiador%20gol', '.painel-res .res-cont b']]) {
+      await ir(p360, cz[0], cz[1]);
+      var ent = '#conteudo > :not([data-velho]) .busca-linha .entrada';
+      await p360.fill(ent, 'mangueira radiador gol');
+      var cb = await p360.evaluate(function (sel) {
+        var e = document.querySelector(sel), cs = getComputedStyle(e), b = e.getBoundingClientRect(), bt = document.querySelector('#conteudo .busca-linha .btn-buscar').getBoundingClientRect();
+        return { area: e.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), sobrepoe: bt.top < b.bottom - 1 && bt.left < b.right - 1 && bt.right > b.left + 1, voz: !!document.querySelector('#conteudo .busca-linha .btn-voz') };
+      }, ent);
+      if (cb.area < 60 || cb.sobrepoe) cortes.push(cz[0] + ' campo de busca com ' + Math.round(cb.area) + ' px para o texto' + (cb.sobrepoe ? ' e o Buscar por cima' : '') + (cb.voz ? ' (com microfone)' : ''));
+    }
+    await ir(p360, '#/placa', '.entrada-placa'); await p360.fill('#conteudo .entrada-placa', 'ABC1D23');
+    var pl = await p360.evaluate(function () { var e = document.querySelector('#conteudo .entrada-placa'); return [e.value, e.scrollWidth, e.clientWidth]; });
+    if (pl[1] > pl[2]) cortes.push('placa "' + pl[0] + '" ' + pl[1] + '/' + pl[2]);
+    await ir(p360, '#/busca', '.seletor select');
+    await p360.selectOption('#conteudo .seletor select >> nth=0', 'Mercedes-Benz');
+    await p360.waitForFunction(function () { var s = document.querySelectorAll('#conteudo .seletor select'); return s[1] && !s[1].disabled && s[1].options.length > 1; });
+    var sc = await p360.evaluate(function () {
+      var cv = document.createElement('canvas').getContext('2d');
+      return Array.prototype.map.call(document.querySelectorAll('#conteudo .seletor select'), function (e) {
+        var cs = getComputedStyle(e), livre = e.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), txt = e.options[e.selectedIndex] ? e.options[e.selectedIndex].text : '';
+        cv.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+        /* o texto quebra nos espaços e depois do hífen ("Mercedes-" / "Benz") */
+        var maior = Math.max.apply(null, txt.split(/\s+/).join(' ').replace(/-/g, '- ').split(' ').map(function (w) { return cv.measureText(w).width; }));
+        return { txt: txt, livre: livre, maior: maior };
+      });
+    });
+    sc.forEach(function (x) { if (x.maior > x.livre + 0.5) cortes.push('seletor "' + x.txt + '" (palavra de ' + Math.round(x.maior) + ' px em ' + Math.round(x.livre) + ')'); });
+    ok(!cortes.length, 'zoom de 200% (' + zl + ' px): busca com espaço para o texto, placa "ABC1D23" inteira e seletores de veículo sem palavra cortada' + (cortes.length ? ' (' + cortes.join(' | ') + ')' : ''));
+    if (zl === 195) { await ir(p360, '#/peca/MG001', 'table.tabela'); await capturar(p360, '18-zoom-200-ficha'); }
+  }
+  await p360.setViewportSize({ width: 390, height: 844 });
+  await p360.evaluate(function () { localStorage.removeItem('mg-lista'); localStorage.removeItem('mg-favoritos'); });
+  /* PC com teclado (1366 × 768): cada parada do Tab fica inteira à vista, nunca atrás do topo nem da barra de abas fixa
+     (scroll-padding em app.css), também com a barra "Atualização disponível" à mostra */
+  var cPc = await browser.newContext({ viewport: { width: 1366, height: 768 }, locale: 'pt-BR', serviceWorkers: 'block' });
+  await rotas(cPc);
+  var pPc = await cPc.newPage(), cobertos = []; colher(pPc, erros);
+  for (var barraPc of [false, true]) {
+    for (var tPc of [['#/peca/MG001', 'table.tabela tbody tr'], ['#/sobre', '.versao b'], ['#/linha/filtro-ar', '.lista .item-cod']]) {
+      await pPc.goto(base + tPc[0]); await pPc.waitForSelector('#conteudo ' + tPc[1]);
+      if (barraPc) await pPc.evaluate(function () { document.getElementById('aviso-atualizar').hidden = false; });
+      for (var kt = 0; kt < 45; kt++) {
+        await pPc.keyboard.press('Tab');
+        var fc = await pPc.evaluate(function () {
+          var e = document.activeElement; if (!e || e === document.body || e.classList.contains('pular')) return null; /* "Ir para o conteúdo" aparece por cima do topo */
+          for (var n = e; n; n = n.parentElement) { var ps = getComputedStyle(n).position; if (ps === 'fixed' || ps === 'sticky') return null; }
+          var r = e.getBoundingClientRect(), sup = document.querySelector('.topo').getBoundingClientRect().bottom, inf = document.querySelector('.abas').getBoundingClientRect().top, b = document.getElementById('aviso-atualizar');
+          if (b && !b.hidden) inf = Math.min(inf, b.getBoundingClientRect().top);
+          return r.top < sup - 1 || r.bottom > inf + 1 ? (e.getAttribute('aria-label') || e.textContent || e.tagName).trim().replace(/\s+/g, ' ').slice(0, 30) + ' (' + Math.round(r.top) + '..' + Math.round(r.bottom) + ')' : null;
+        });
+        if (fc) cobertos.push((barraPc ? '[barra] ' : '') + tPc[0] + ' ' + fc);
+      }
+    }
+  }
+  ok(!cobertos.length, 'PC 1366: nenhuma parada do Tab coberta pelo topo ou pela barra de abas (ficha, Sobre e linha, com e sem a barra "Atualização disponível")' + (cobertos.length ? ': ' + cobertos.slice(0, 6).join(' | ') : ''));
+  await cPc.close();
+
+  console.log('\nFotos sem conexão');
+  /* foto que ainda não está no aparelho: sem conexão diz isso (e não "Sem foto"); a rede voltando, ela aparece sozinha */
+  var pf = await ctx.newPage(); colher(pf, erros);
+  await pf.goto(base + '#/'); await pf.waitForSelector('.secao-busca .entrada'); await pf.waitForLoadState('networkidle');
+  var FOTOS = /mitiendanube|nuvemshop|tiendanube/;
+  await pf.route(FOTOS, function (r) { return r.abort('internetdisconnected'); });
+  await ctx.setOffline(true);
+  await ir(pf, '#/busca?q=reservatorio', '.painel-res .res-cont b');
+  await pf.waitForSelector('#conteudo .foto.sem .sem-txt', { timeout: 10000 });
+  var txtSemRede = await pf.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('#conteudo .foto .sem-txt'), function (e) { return e.textContent; }); });
+  ok(txtSemRede.length > 0 && txtSemRede.every(function (t) { return t === 'Sem conexão'; }), 'sem conexão a foto diz "Sem conexão", não "Sem foto" (' + txtSemRede.length + ' fotos)');
+  await pf.unroute(FOTOS); await ctx.setOffline(false);
+  var voltou = await pf.waitForFunction(function () { return !document.querySelector('#conteudo .foto.sem') && document.querySelectorAll('#conteudo .foto.ok').length > 0; }, null, { timeout: 10000 }).then(function () { return true; }, function () { return false; });
+  ok(voltou, 'com a conexão de volta, as fotos aparecem sem recarregar a tela');
+  /* ficha: a foto que voltou com a rede amplia (o toque continua preso à mesma caixa da foto) */
+  await pf.route(FOTOS, function (r) { return r.abort('internetdisconnected'); });
+  await ctx.setOffline(true);
+  await ir(pf, '#/peca/MG1903', 'table.tabela tbody tr');
+  await pf.waitForSelector('#conteudo .detalhe-foto .foto.sem', { timeout: 10000 });
+  await pf.unroute(FOTOS); await ctx.setOffline(false);
+  await pf.waitForSelector('#conteudo .detalhe-foto .foto.ok', { timeout: 10000 });
+  await pf.click('#conteudo .btn-ampliar');
+  ok(await pf.waitForFunction(function () { var z = document.querySelector('.zoom'); return z && !z.hidden && getComputedStyle(z).display !== 'none'; }, null, { timeout: 5000 }).then(function () { return true; }, function () { return false; }), 'ficha sem conexão → conexão de volta: "Ampliar foto" abre a foto ampliada');
+  await pf.keyboard.press('Escape');
+  await pf.close();
   await ctx.close();
 
   /* ---------- busca por voz (Web Speech API simulada) ----------
@@ -797,11 +934,15 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
     });
   }
   var mv = await medirLinha(pv);
-  ok(mv.voz && mv.voz[0] === 44 && mv.voz[1] === 44 && mv.dentro && mv.voz[2] >= 0 && mv.voz[3] <= 0, 'Início: botão do microfone de 44×44 px dentro do campo (' + JSON.stringify(mv.voz) + ')');
+  /* área de toque de 48×48 (a parte visível continua a de 44: borda transparente, app.css) */
+  ok(mv.voz && mv.voz[0] === 48 && mv.voz[1] === 48 && mv.dentro && mv.voz[2] >= 0 && mv.voz[3] <= 0, 'Início: botão do microfone com área de toque de 48×48 px dentro do campo (' + JSON.stringify(mv.voz) + ')');
   ok(mv.linha === 56 && mv.btn[0] >= 44 && mv.btn[1] >= 44, 'a linha do campo continua com 56 px e o botão de busca com 44 px ou mais (' + mv.linha + ' / ' + mv.btn.join('×') + ')');
   /* "Código, nº original ou nome" em Barlow 500 16px mede 189 px (medido com a fonte do Google); o teste não baixa a fonte, então confere a largura útil do campo */
   ok(mv.util >= 189 && mv.padDir === 48, 'placeholder inteiro ao lado do microfone em 390 (largura útil ' + mv.util + ' px, mínimo 189)');
   ok(mv.rotulo === 'Buscar por voz' && mv.pressed === 'false' && !mv.ouvindo, 'botão "Buscar por voz" em repouso');
+  /* a região viva do "Ouvindo…" já existe antes (vazia e sem altura): o texto que entra nela é anunciado pelo leitor de tela */
+  var estado0 = await pv.evaluate(function () { var e = document.querySelector('#conteudo .voz-estado'); return e && [e.hidden, e.getAttribute('role'), e.getAttribute('aria-live'), e.textContent, Math.round(e.getBoundingClientRect().height)]; });
+  ok(estado0 && estado0[0] === false && estado0[1] === 'status' && estado0[2] === 'polite' && estado0[3] === '' && estado0[4] === 0, 'região viva do "Ouvindo…" presente e vazia em repouso (' + JSON.stringify(estado0) + ')');
   /* 1ª vez: aviso de privacidade com "Agora não" e "Entendi, usar"; nada é iniciado antes de aceitar */
   await pv.click('.secao-busca .btn-voz');
   var aviso1 = await pv.evaluate(function () { var a = document.querySelector('#conteudo .voz-aviso'); return { visivel: a && !a.hidden, texto: a && a.textContent, botoes: a ? Array.prototype.map.call(a.querySelectorAll('button'), function (b) { return b.textContent + '|' + b.getBoundingClientRect().height; }) : [], iniciou: window.__voz.iniciou, foco: document.activeElement.tagName + '.' + document.activeElement.className, guardado: localStorage.getItem('mg-voz-aviso') }; });
@@ -830,14 +971,14 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await capturar(pv, '14-voz-resultado');
   /* na tela de resultados o campo tem texto: × e microfone lado a lado, sem sobrepor; o aviso não volta (escolha lembrada) */
   var mr = await medirLinha(pv);
-  ok(mr.voz && mr.xSemSobrepor === true && mr.padDir === 92 && mr.linha === 56, 'resultados: × e microfone lado a lado dentro do campo, sem sobrepor (padding ' + mr.padDir + ' px)');
+  ok(mr.voz && mr.xSemSobrepor === true && mr.padDir === 96 && mr.linha === 56,'resultados: × e microfone lado a lado dentro do campo, sem sobrepor (padding ' + mr.padDir + ' px)');
   await pv.click('#conteudo .btn-voz');
   var seg = await pv.evaluate(function () { return { aviso: document.querySelector('#conteudo .voz-aviso').hidden, iniciou: window.__voz.iniciou, ouvindo: !!document.querySelector('#conteudo .busca-linha.ouvindo'), x: document.querySelector('#conteudo .limpar').hidden }; });
   ok(seg.aviso && seg.iniciou === 2 && seg.ouvindo && seg.x, 'com a escolha lembrada o microfone liga direto; o × some enquanto ouve');
   /* toque de novo cancela: abort, sem toast, campo como antes */
   await pv.click('#conteudo .btn-voz'); await pv.waitForTimeout(100);
-  var canc = await pv.evaluate(function () { return { abortou: window.__voz.abortou, ouvindo: !!document.querySelector('#conteudo .busca-linha.ouvindo'), toast: document.getElementById('toast').hidden, campo: document.querySelector('#conteudo .entrada').value, x: document.querySelector('#conteudo .limpar').hidden }; });
-  ok(canc.abortou === 1 && !canc.ouvindo && canc.toast && canc.campo === 'mangueira radiador gol 2010 1.6' && !canc.x, 'toque de novo cancela (abort) sem toast e o campo volta ao que era');
+  var canc = await pv.evaluate(function () { return { abortou: window.__voz.abortou, ouvindo: !!document.querySelector('#conteudo .busca-linha.ouvindo'), toast: document.getElementById('toast').hidden, campo: document.querySelector('#conteudo .entrada').value, x: document.querySelector('#conteudo .limpar').hidden, estado: document.querySelector('#conteudo .voz-estado').textContent }; });
+  ok(canc.abortou === 1 && !canc.ouvindo && canc.toast && canc.campo === 'mangueira radiador gol 2010 1.6' && !canc.x && canc.estado === '', 'toque de novo cancela (abort) sem toast, o campo volta ao que era e a região viva fica vazia');
   /* erros e vazio: toasts honestos, estado em repouso e foco de volta ao campo */
   var casos = [['not-allowed', 'Microfone sem permissão'], ['no-speech', 'Não entendi, tente de novo'], ['network', 'Busca por voz precisa de internet'], ['', 'Não entendi, tente de novo']];
   for (var cv = 0; cv < casos.length; cv++) {
@@ -879,10 +1020,10 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await pv.click('.secao-busca .btn-voz'); await pv.waitForTimeout(100); await escolherTema(pv, null);
   await pv.setViewportSize({ width: 360, height: 740 }); await ir(pv, '#/busca', '.btn-voz'); await ir(pv, '#/', '.secao-busca .btn-voz');
   var m360 = await medirLinha(pv), ph360 = await pv.evaluate(function () { var i = document.querySelector('#conteudo .entrada'), c = document.createElement('canvas').getContext('2d'); c.font = getComputedStyle(i, '::placeholder').font; return Math.round(c.measureText(i.placeholder).width); });
-  ok(m360.linha === 56 && m360.voz[0] === 44 && m360.btn[0] >= 44 && m360.largura === '360/360' && m360.util >= ph360, '360: linha 56 px, microfone 44 px, botão de busca ≥ 44 px, sem rolagem horizontal e placeholder inteiro (' + ph360 + ' ≤ ' + m360.util + ' px)');
+  ok(m360.linha === 56 && m360.voz[0] === 48 && m360.btn[0] >= 44 && m360.largura === '360/360' && m360.util >= ph360, '360: linha 56 px, microfone 48 px,botão de busca ≥ 44 px, sem rolagem horizontal e placeholder inteiro (' + ph360 + ' ≤ ' + m360.util + ' px)');
   await pv.setViewportSize({ width: 844, height: 390 }); await pv.waitForTimeout(100);
   var m844 = await medirLinha(pv);
-  ok(m844.linha === 56 && m844.voz[0] === 44 && m844.largura === '844/844', 'paisagem 844×390: linha 56 px com o microfone, sem rolagem horizontal');
+  ok(m844.linha === 56 && m844.voz[0] === 48 && m844.largura === '844/844','paisagem 844×390: linha 56 px com o microfone, sem rolagem horizontal');
   await pv.setViewportSize({ width: 1366, height: 768 }); await ir(pv, '#/busca', '.btn-voz'); await ir(pv, '#/', '.secao-busca .btn-voz');
   await pv.focus('.secao-busca .entrada'); await pv.keyboard.press('Tab');
   var tab1 = await pv.evaluate(function () { return document.activeElement.className; });
@@ -1111,15 +1252,16 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await pg.reload(); await pg.waitForSelector('.secao-busca .entrada');
   ok(await pg.evaluate(function () { return !!navigator.serviceWorker.controller; }), 'página controlada pelo service worker');
   await ir(pg, '#/peca/MG001', 'table.tabela tbody tr'); /* detalhes.json pedido pela ficha e guardado pelo SW */
+  await ir(pg, '#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.painel-res .res-cont b'); /* marcas/volkswagen.json, idem */
   var cacheOk = await pg.evaluate(function (v) {
     var fim = Date.now() + 40000;
     function tenta() {
-      return caches.open('mg-dados-' + v).then(function (c) { return Promise.all([c.match('dados/detalhes.json'), c.match('dados/indice.json'), c.match('dados/produtos.json')]); })
+      return caches.open('mg-dados-' + v).then(function (c) { return Promise.all([c.match('dados/detalhes.json'), c.match('dados/indice.json'), c.match('dados/produtos.json'), c.match('dados/marcas/volkswagen.json')]); })
         .then(function (r) { if (r.every(Boolean)) return true; if (Date.now() > fim) return false; return new Promise(function (ok) { setTimeout(ok, 300); }).then(tenta); });
     }
     return tenta();
   }, versao);
-  ok(cacheOk, 'índice, produtos e detalhes no cache mg-dados-' + versao);
+  ok(cacheOk, 'índice, produtos, detalhes e a marca aberta no cache mg-dados-' + versao);
   var caches2 = await pg.evaluate(function () { return caches.keys(); });
   ok(caches2.indexOf('mg-casca-' + versao) >= 0, 'cache da casca mg-casca-' + versao + ' (' + caches2.join(', ') + ')');
   ok(!(await pg.evaluate(function (v) { return caches.open('mg-casca-' + v).then(function (c) { return c.keys(); }).then(function (ks) { return ks.some(function (k) { return /\/teste\//.test(k.url); }); }); }, versao)), 'nada de teste/ no cache');
@@ -1129,16 +1271,154 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
   await pg.waitForFunction(function () { return !/…/.test(document.querySelector('.grade-linhas .cont').textContent); });
   await ir(pg, '#/peca/MG001', 'table.tabela tbody tr');
   igual(await pg.textContent('#conteudo .detalhe-cod'), 'MG001', 'ficha MG001 abre offline com a aplicação');
+  /* abertura do zero sem rede (aba nova, como abrir o app instalado) direto numa ficha; depois as outras telas */
+  var pgFrio = await ctx2.newPage(); colher(pgFrio, erros2);
+  await pgFrio.goto(base + '#/peca/MG046');
+  ok(await pgFrio.waitForSelector('#conteudo table.tabela tbody tr', { timeout: 15000 }).then(function () { return true; }, function () { return false; }), 'aba nova sem rede abre direto na ficha MG046 (casca e dados do cache)');
+  var offTelas = [['#/busca?q=mangueira%20gol', '.painel-res .res-cont b'], ['#/veiculo/Volkswagen/Gol/2010?motor=1.6', '.painel-res .res-cont b'], ['#/linhas', '.grade-linhas'], ['#/linha/filtro-ar', '.lista .item-cod'], ['#/placa', '.btn-amarelo'], ['#/lista', 'h2'], ['#/minhas', 'h2'], ['#/sobre', '.versao b'], ['#/instalar', '.qr-caixa svg']], offFalhas = [];
+  for (var ot = 0; ot < offTelas.length; ot++) await ir(pgFrio, offTelas[ot][0], offTelas[ot][1]).catch(function () { offFalhas.push(offTelas[ot][0]); });
+  ok(!offFalhas.length, 'sem rede, as outras telas também abrem (' + (offTelas.length - offFalhas.length) + ' de ' + offTelas.length + (offFalhas.length ? '; falharam: ' + offFalhas.join(', ') : '') + ')');
+  await pgFrio.close();
   /* aviso "Sem conexão" (navigator.onLine): aparece ao cair a rede, com a data da última carga, e some ao voltar */
   ok(await pg.evaluate(function () { return document.getElementById('aviso-offline').hidden; }), 'aviso de sem conexão escondido com rede');
   await ctx2.setOffline(true);
   await pg.waitForFunction(function () { return !document.getElementById('aviso-offline').hidden; }, null, { timeout: 5000 });
   ok(/^Sem conexão · dados guardados em \d\d\/\d\d\/\d{4}$/.test(await pg.textContent('#aviso-offline')), 'aviso "Sem conexão · dados guardados em <data>" (' + (await pg.textContent('#aviso-offline')) + ')');
   if (capturas) await capturar(pg, '07-offline');
+  /* "Procurar atualização" sem conexão: avisa na hora, sem ir à rede à toa */
+  await ir(pg, '#/sobre', '.versao b'); await pg.click('#conteudo button:has-text("Procurar atualização")');
+  ok(await pg.waitForFunction(function () { var t = document.getElementById('toast'); return !t.hidden && t.textContent === 'Não foi possível verificar agora. Confira a conexão.'; }, null, { timeout: 5000 }).then(function () { return true; }, function () { return false; }), 'sem conexão, "Procurar atualização" diz "Não foi possível verificar agora. Confira a conexão."');
   await ctx2.setOffline(false);
   await pg.waitForFunction(function () { return document.getElementById('aviso-offline').hidden; }, null, { timeout: 5000 });
   ok(true, 'aviso some ao voltar a conexão');
   await ctx2.close();
+
+  /* ---------- versão nova publicada: "Procurar atualização" e a troca de versão ----------
+     Servidor à parte (outra origem: service worker e caches do zero). Sem service worker (app do iPhone, marcado com
+     MG_APP_LOJA = 'ios' e MGCatalogoApp-iOS no agente, e navegador sem SW), o botão lê config.js direto do servidor e
+     recarrega com a versão nova; com service worker, o caminho de sempre (barra "Atualização disponível" e Atualizar).
+     Depois da troca, index.html, app.js, app.css e config.js são todos da versão nova: nenhuma tela junta versões. */
+  console.log('\nAtualização (versão nova publicada)');
+  var srvV = await servidor(), baseV = 'http://127.0.0.1:' + srvV.address().port + '/', errosV = [];
+  var nova = versao.replace(/-(\d+)$/, function (m, n) { return '-' + (+n + 1); });
+  var UA_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MGCatalogoApp-iOS/1.0';
+  async function abrirAtualizar(tipo) {
+    var c = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'pt-BR', serviceWorkers: tipo === 'sw' ? 'allow' : 'block', userAgent: tipo === 'ios' ? UA_IOS : undefined });
+    await rotas(c);
+    if (tipo === 'ios') await c.addInitScript(function () { window.MG_APP_LOJA = 'ios'; try { delete Navigator.prototype.serviceWorker; } catch (e) {} });
+    /* cada toast mostrado vai para o console: a lista continua valendo depois da recarga da página */
+    await c.addInitScript(function () { document.addEventListener('DOMContentLoaded', function () { var t = document.getElementById('toast'); if (t) new MutationObserver(function () { if (!t.hidden && t.textContent) console.log('[toast] ' + t.textContent); }).observe(t, { childList: true, subtree: true, attributes: true }); }); });
+    var pa = await c.newPage(); colher(pa, errosV); pa.toasts = [];
+    pa.on('console', function (m) { var t = /^\[toast\] (.*)$/.exec(m.text()); if (t) pa.toasts.push(t[1]); });
+    await pa.goto(baseV + '#/sobre'); await pa.waitForSelector('#conteudo .versao b');
+    return pa;
+  }
+  async function esperarToast(pa, re, desde) {
+    for (var fim = Date.now() + 20000; Date.now() < fim; await new Promise(function (r) { setTimeout(r, 100); })) {
+      var achou = pa.toasts.slice(desde).filter(function (t) { return re.test(t); })[0];
+      if (achou) return achou;
+    }
+    return 'nenhum (' + pa.toasts.slice(desde).join(' | ') + ')';
+  }
+  /* toca em "Procurar atualização" depois que o toast anterior sumiu; devolve o toast que responder */
+  async function procurarAtualizacao(pa) {
+    await pa.waitForFunction(function () { return document.getElementById('toast').hidden; }, null, { timeout: 8000 }).catch(function () {});
+    var desde = pa.toasts.length;
+    await pa.click('#conteudo button:has-text("Procurar atualização")');
+    return esperarToast(pa, /mais recente|encontrada|Não foi possível/, desde);
+  }
+  function versoesNaTela(pa) {
+    return pa.evaluate(function () { var m = document.querySelector('meta[name="versao-html"]'); return [m ? m.content : '-', window.__versaoJs || '-', getComputedStyle(document.documentElement).getPropertyValue('--versao-css').trim().replace(/"/g, '') || '-', window.MG_CONFIG.versao].join(' '); });
+  }
+  var todasNovas = [nova, nova, nova, nova].join(' ');
+  for (var tipoV of ['ios', 'navegador']) {
+    var rotV = tipoV === 'ios' ? 'app do iPhone sem service worker' : 'navegador sem service worker';
+    srvV.versaoNova = null;
+    var pa = await abrirAtualizar(tipoV);
+    ok(/^Toque em Procurar atualização/.test(await pa.textContent('#conteudo .ajuda-atualizacao')), rotV + ': o Sobre diz que a procura é pelo botão');
+    if (tipoV === 'ios') ok(!(await pa.$('#conteudo .so-navegador')) && !/Instalar/i.test(await pa.textContent('#conteudo')), rotV + ': nada de instalar no Sobre');
+    var n0 = srvV.urls.length, tv1 = await procurarAtualizacao(pa);
+    ok(tv1 === 'Você já está na versão mais recente.' && srvV.urls.slice(n0).some(function (u) { return /^\/config\.js\?versao=\d+$/.test(u); }), rotV + ': mesma versão → "' + tv1 + '" (config.js lido do servidor, endereço único)');
+    srvV.versaoNova = nova;
+    var navV = pa.waitForEvent('load', { timeout: 20000 }).catch(function () { return null; });
+    var tv2 = await procurarAtualizacao(pa), d2 = pa.toasts.length;
+    ok(tv2 === 'Versão nova encontrada (' + nova + '). Atualizando…', rotV + ': versão nova publicada → "' + tv2 + '"');
+    await navV; await pa.waitForSelector('#conteudo .versao b', { timeout: 20000 });
+    var tv3 = await esperarToast(pa, /App atualizado|ainda não chegou/, d2), vv = await versoesNaTela(pa);
+    ok(tv3 === 'App atualizado · versão ' + nova && vv === todasNovas, rotV + ': recarrega uma vez com tudo da versão nova (index.html, app.js, app.css, config.js: ' + vv + ') e confirma "' + tv3 + '"');
+    await pa.context().setOffline(true);
+    var tv4 = await procurarAtualizacao(pa);
+    ok(tv4 === 'Não foi possível verificar agora. Confira a conexão.', rotV + ': sem conexão → "' + tv4 + '"');
+    await pa.context().close();
+  }
+  /* sem service worker, versão nova publicada com o app aberto: a marca que ainda não foi aberta não é lida da publicação
+     nova junto com o índice e os produtos desta (posições de outra geração); o app recarrega uma vez com a versão nova */
+  srvV.versaoNova = null;
+  var pm = await abrirAtualizar('navegador');
+  srvV.versaoNova = nova;
+  var navM = pm.waitForEvent('load', { timeout: 20000 }).catch(function () { return null; }), dm = pm.toasts.length;
+  await pm.evaluate(function () { location.hash = '#/veiculo/Fiat/Uno/2005'; });
+  var tm1 = await esperarToast(pm, /encontrada/, dm);
+  await navM; await pm.waitForSelector('#conteudo .painel-res .res-cont b', { timeout: 20000 });
+  var tm2 = await esperarToast(pm, /App atualizado|ainda não chegou/, dm), vm = await versoesNaTela(pm), nm = await pm.evaluate(function () { return document.querySelectorAll('#conteudo .painel-res .item-cod').length; });
+  ok(tm1 === 'Versão nova encontrada (' + nova + '). Atualizando…' && tm2 === 'App atualizado · versão ' + nova && vm === todasNovas && nm > 0, 'navegador sem service worker, versão nova publicada com o app aberto: abrir uma marca nova recarrega com tudo da versão nova (' + vm + ', "' + tm2 + '") e lista ' + nm + ' peças do Fiat Uno 2005');
+  await pm.context().close();
+
+  /* com service worker: dados com max-age (GitHub Pages), versão nova com outro detalhes.json */
+  srvV.versaoNova = null; srvV.maxAge = true;
+  var ps = await abrirAtualizar('sw');
+  await ps.waitForFunction(function () { return !!navigator.serviceWorker.controller && /barra/.test(document.querySelector('#conteudo .ajuda-atualizacao').textContent); }, null, { timeout: 20000 }).catch(function () {});
+  ok(/aparece a barra "Atualização disponível"/.test(await ps.textContent('#conteudo .ajuda-atualizacao')), 'com service worker: o Sobre continua dizendo que o app procura sozinho e mostra a barra "Atualização disponível"');
+  var n1 = srvV.urls.length, ts1 = await procurarAtualizacao(ps);
+  ok(ts1 === 'Você já está na versão mais recente.', 'com service worker, mesma versão → "' + ts1 + '"');
+  srvV.versaoNova = nova;
+  var ts2 = await procurarAtualizacao(ps);
+  var barraV = await ps.waitForSelector('#aviso-atualizar:not([hidden])', { timeout: 10000 }).then(function () { return true; }, function () { return false; });
+  ok(ts2 === 'Atualização encontrada: toque em Atualizar.' && barraV, 'com service worker, versão nova → "' + ts2 + '" e a barra "Atualização disponível"');
+  /* antes do Atualizar, a página da versão anterior abre uma marca que ainda não estava no aparelho: o SW não traz o arquivo
+     da publicação nova (as posições em produtos.json podem ter mudado); a tela diz que o catálogo foi atualizado */
+  await ps.evaluate(function (v) { return caches.open('mg-dados-' + v).then(function (c) { return c.delete('dados/marcas/fiat.json'); }); }, versao);
+  await ir(ps, '#/veiculo/Fiat/Uno/2005', '.status.aviso, .painel-res .res-cont b');
+  var mist = await ps.evaluate(function (v) { return caches.open('mg-dados-' + v).then(function (c) { return c.match('dados/marcas/fiat.json'); }).then(function (r) { var st = document.querySelector('#conteudo .status.aviso'); return [st ? st.textContent : '(sem aviso)', document.querySelectorAll('#conteudo .item-cod').length, !!r]; }); }, versao);
+  ok(mist[0] === 'O catálogo foi atualizado depois que o app abriu. Toque em Atualizar para ver as peças deste veículo.' && mist[1] === 0 && !mist[2], 'versão anterior aberta, marca ainda não guardada: nenhuma peça de outra publicação e o aviso "' + mist[0] + '" (fiat.json no cache da versão anterior: ' + mist[2] + ')');
+  await ir(ps, '#/sobre', '.versao b');
+  ok(!srvV.urls.slice(n1).some(function (u) { return /config\.js\?versao=/.test(u); }), 'com service worker o botão segue o caminho de sempre (sem config.js?versao=…)');
+  var navS = ps.waitForEvent('load', { timeout: 20000 }).catch(function () { return null; }), d3 = ps.toasts.length;
+  await ps.click('#btn-atualizar');
+  await navS; await ps.waitForSelector('#conteudo .versao b', { timeout: 20000 });
+  var ts3 = await esperarToast(ps, /App atualizado/, d3), vs = await versoesNaTela(ps), cachesV = await ps.evaluate(function () { return caches.keys(); });
+  ok(ts3 === 'App atualizado · versão ' + nova && vs === todasNovas, 'Atualizar: recarrega uma vez com tudo da versão nova (' + vs + ') e confirma "' + ts3 + '"');
+  ok(cachesV.indexOf('mg-casca-' + nova) >= 0 && cachesV.indexOf('mg-dados-' + nova) >= 0 && !cachesV.some(function (k) { return k === 'mg-casca-' + versao || k === 'mg-dados-' + versao; }), 'caches da versão anterior apagados (' + cachesV.join(', ') + ')');
+  /* detalhes.json da versão nova (não a cópia de 10 min do cache HTTP) e o Fiat Uno com peças */
+  function detalhesNoCache(pa, v) {
+    return pa.evaluate(function (v) {
+      var fim = Date.now() + 20000;
+      function tenta() { return caches.open('mg-dados-' + v).then(function (c) { return c.match('dados/detalhes.json'); }).then(function (r) { if (r) return r.json().then(function (d) { return d.gerado; }); if (Date.now() > fim) return '(fora do cache)'; return new Promise(function (ok) { setTimeout(ok, 300); }).then(tenta); }); }
+      return tenta();
+    }, v);
+  }
+  await ir(ps, '#/peca/MG001', 'table.tabela tbody tr');
+  igual(await detalhesNoCache(ps, nova), nova, 'depois do Atualizar, mg-dados-' + nova + ' guarda o detalhes.json da versão nova (dados com max-age=600)');
+  await ir(ps, '#/veiculo/Fiat/Uno/2005', '.painel-res .res-cont b');
+  ok(await ps.evaluate(function () { return document.querySelectorAll('#conteudo .painel-res .item-cod').length > 0; }), 'depois do Atualizar, o Fiat Uno 2005 lista as peças');
+  /* outra versão publicada; a barra aparece e a pessoa fecha o app sem tocar em Atualizar e abre de novo: a versão nova
+     assume com os próprios dados, nunca com a cópia da anterior guardada no cache HTTP */
+  var nova2 = nova.replace(/-(\d+)$/, function (m, n) { return '-' + (+n + 1); });
+  await ir(ps, '#/sobre', '.versao b');
+  srvV.versaoNova = nova2;
+  var ts4 = await procurarAtualizacao(ps);
+  ok(ts4 === 'Atualização encontrada: toque em Atualizar.', 'versão ' + nova2 + ' publicada → "' + ts4 + '"');
+  var ctxS = ps.context();
+  await ps.close();
+  await ctxS.newPage().then(function (pb) { return pb.waitForTimeout(1500).then(function () { return pb.close(); }); });
+  var pr = await ctxS.newPage(); colher(pr, errosV);
+  await pr.goto(baseV + '#/peca/MG001'); await pr.waitForSelector('#conteudo table.tabela tbody tr', { timeout: 20000 });
+  var vr = await versoesNaTela(pr), dr = await detalhesNoCache(pr, nova2);
+  ok(vr === [nova2, nova2, nova2, nova2].join(' ') && dr === nova2, 'fechou sem Atualizar e abriu de novo: tudo da versão ' + nova2 + ' (' + vr + ') e o detalhes.json dela no cache (' + dr + ')');
+  await ctxS.close();
+  srvV.maxAge = false;
+  await srvV.derrubar();
+  ok(!errosV.length, 'sem erros de console na atualização' + (errosV.length ? ':\n    ' + errosV.join('\n    ') : ''));
   await browser.close();
 
   console.log('\nConsole');
