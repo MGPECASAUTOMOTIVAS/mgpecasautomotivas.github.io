@@ -21,8 +21,8 @@
     "path": "mg-app-upload.keystore",
     "alias": "mgapp"
   },
-  "appVersion": "2026.11.02-29",
-  "appVersionCode": 1,
+  "appVersion": "2026.11.02-35",
+  "appVersionCode": 2,
   "enableNotifications": false,
   "enableSiteSettingsShortcut": true,
   "shortcuts": [

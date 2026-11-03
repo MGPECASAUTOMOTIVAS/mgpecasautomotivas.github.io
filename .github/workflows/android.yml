@@ -11,7 +11,8 @@
 # Como rodar: Actions → "Android (Google Play)" → Run workflow. Para enviar uma versão nova à Play, o appVersionCode do
 # twa-manifest.json tem que ser maior que o do último envio (ou informe-o na caixa "version_code" ao rodar).
 #
-# Build de TESTE (só em push no branch "lojas" e só quando os dois segredos acima NÃO existem): o runner cria uma chave
+# Build de TESTE (só na main ou no branch "lojas", em push ou Run workflow, e só quando os dois segredos acima NÃO
+# existem; numa tag android-v* os segredos são sempre obrigatórios): o runner cria uma chave
 # descartável, que some no fim do run, e assina com ela, para provar que o build funciona. Os arquivos saem com o nome
 # "TESTE-NAO-ENVIAR-..." e NÃO servem para a Play (a Play recusa: a chave não é a de upload). Com os segredos
 # configurados, o workflow usa sempre a chave de verdade, do mesmo jeito de antes.
@@ -27,9 +28,9 @@ on:
   push:
     tags:
       - 'android-v*'
-    # build de teste do branch de preparação das lojas (ver o cabeçalho)
+    # build quando o app Android muda na main (de teste enquanto os segredos não existem; ver o cabeçalho)
     branches:
-      - lojas
+      - main
     paths:
       - '.github/workflows/android.yml'
       - 'twa-manifest.json'
@@ -64,8 +65,9 @@ jobs:
             echo "Segredos encontrados."
             exit 0
           fi
-          # sem nenhum dos dois segredos, num push no branch lojas: build de TESTE com chave descartável
-          if [ -z "$KS" ] && [ -z "$PW" ] && [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/lojas" ]; then
+          # sem nenhum dos dois segredos, na main ou no branch lojas (push ou Run workflow): build de TESTE com chave descartável
+          if [ -z "$KS" ] && [ -z "$PW" ] && { [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; } \
+             && { [ "$GITHUB_REF" = "refs/heads/main" ] || [ "$GITHUB_REF" = "refs/heads/lojas" ]; }; then
             echo "MODO=teste" >> "$GITHUB_ENV"
             echo "::warning::Build de TESTE: sem os segredos KEYSTORE_B64 e KEYSTORE_PASSWORD, o app é assinado com uma chave descartável criada neste run. Os arquivos TESTE-NAO-ENVIAR-* não servem para a Play."
             exit 0

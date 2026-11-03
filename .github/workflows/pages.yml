@@ -22,7 +22,12 @@ jobs:
         with:
           enablement: true
       - name: Tirar a pasta ios/ (app do iPhone) do site publicado
-        run: rm -rf ios
+        run: |
+          rm -rf ios
+          # o site continua inteiro: app, prévias, dados e o assetlinks.json do app Android
+          for f in index.html app.js app.css config.js sw.js manifest.webmanifest privacidade.html p/MG001.html dados/indice.json icones/icone-512.png .well-known/assetlinks.json; do
+            test -s "$f" || { echo "::error::Falta $f no site."; exit 1; }
+          done
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .

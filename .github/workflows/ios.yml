@@ -2,12 +2,14 @@
 # O projeto Xcode é gerado aqui, no runner macOS do GitHub, a partir de ios/project.yml (XcodeGen).
 #
 # Dois trabalhos:
-#  1. "verificar" (todo push no branch lojas que mexa em ios/ ou neste arquivo, e a cada Run workflow): compila para o
+#  1. "verificar" (todo push na main que mexa em ios/ ou neste arquivo, e a cada Run workflow): compila para o
 #     simulador SEM assinatura e abre o app num iPhone simulado: confere a página, o service worker, a ponte de
-#     impressão/compartilhamento, o funcionamento sem o site no ar e a tela "sem internet". Não precisa de conta Apple.
-#  2. "enviar" (só em Actions → "iOS (App Store)" → Run workflow): arquiva, assina sozinho (assinatura automática na
-#     nuvem da Apple) e envia ao App Store Connect, onde o build aparece no TestFlight. Nada vai para a App Store sem o
-#     Filipe enviar para revisão no App Store Connect.
+#     impressão/compartilhamento, o funcionamento sem o site no ar e a tela "sem internet". Também compila o Release
+#     para iPhone sem assinatura e guarda o .app (sem assinatura, não instala em iPhone) como artefato. Não precisa
+#     de conta Apple.
+#  2. "enviar" (só em Actions → "iOS (App Store)" → Run workflow, com a caixa "enviar" marcada, que é o padrão):
+#     arquiva, assina sozinho (assinatura automática na nuvem da Apple) e envia ao App Store Connect, onde o build
+#     aparece no TestFlight. Nada vai para a App Store sem o Filipe enviar para revisão no App Store Connect.
 #
 # Segredos do "enviar" (Settings → Secrets and variables → Actions → New repository secret), ver lojas/apple/GUIA_APPLE.md:
 #   ASC_KEY_ID       ID da chave da API do App Store Connect (10 caracteres)
@@ -21,7 +23,7 @@ name: iOS (App Store)
 on:
   push:
     branches:
-      - lojas
+      - main
     paths:
       - 'ios/**'
       - '.github/workflows/ios.yml'
@@ -31,6 +33,11 @@ on:
         description: 'Versão que aparece na App Store (ex.: 1.0.1). Vazio = a do ios/project.yml'
         required: false
         default: ''
+      enviar:
+        description: 'Assinar e enviar ao App Store Connect (precisa dos 4 segredos). Desmarcado = só compilar e testar'
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -107,6 +114,18 @@ jobs:
             if grep -r -q -F "$t" "$REL"; then echo "::error::O build Release tem código de teste ('$t')."; exit 1; fi
           done
           echo "Release sem o código de teste: -mgDiagnostico, -mgEndereco, -mgTema e -mgLista não fazem nada no app da loja."
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleShortVersionString" -c "Print :CFBundleVersion" "$REL/Info.plist"
+          # .app do Release sem assinatura, como artefato (prova do build; não instala em iPhone e não vai para a loja)
+          mkdir -p "$RUNNER_TEMP/release-sem-assinatura"
+          ditto -c -k --keepParent "$REL" "$RUNNER_TEMP/release-sem-assinatura/MGPecas-Release-iphoneos-SEM-ASSINATURA.app.zip"
+
+      - name: Guardar o .app do Release sem assinatura (7 dias)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-release-sem-assinatura
+          path: ${{ runner.temp }}/release-sem-assinatura/
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Abrir no iPhone simulado e conferir (catálogo, service worker, sem o site no ar, sem internet)
         # teste de comportamento: se falhar, o build continua valendo; o resultado fica no log e nas imagens
@@ -167,7 +186,7 @@ jobs:
 
   enviar:
     name: Arquivar, assinar e enviar ao App Store Connect (TestFlight)
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.enviar
     needs: verificar
     runs-on: macos-26-intel
     timeout-minutes: 60

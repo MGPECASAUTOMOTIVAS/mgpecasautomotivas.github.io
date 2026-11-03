@@ -115,7 +115,7 @@ do Filipe ("pode liberar a placa no endereço novo") na versão 89ba40f8 do Work
 `Access-Control-Allow-Origin: https://mgpecasautomotivas.github.io`. A busca pela placa funciona no app, sem mudança no código
 do app. Os apps das lojas (Google Play/TWA e iPhone/WKWebView) abrem o próprio https://mgpecasautomotivas.github.io/, então a
 origem é a mesma e não há o que acrescentar (no app do iPhone, o domínio do Worker está em `WKAppBoundDomains`, em
-`ios/project.yml` do ramo `lojas`).
+`ios/project.yml`).
 O Worker é publicado pelo wrangler a partir da pasta de deploy do notebook (`Downloads\mg-buscador\worker-placa\deploy`); a
 cópia `buscador_veiculo/worker-placa/worker.js` da pasta do projeto é a de 26/10.
 Para uma origem fora da lista (por exemplo, o app rodando em `http://127.0.0.1:8765`), o Worker responde o preflight com
@@ -158,9 +158,12 @@ O app do iPhone é uma casca nativa (Swift, WKWebView) que abre https://mgpecasa
 gerado pelo XcodeGen a partir de `ios/project.yml`) e workflow `.github/workflows/ios.yml` ("iOS (App Store)"), que compila no
 runner macOS do GitHub e, no Run workflow, assina e envia ao App Store Connect (TestFlight); não precisa de Mac. Guia:
 `site-nuvemshop/app_catalogo/lojas/apple/GUIA_APPLE.md`.
-Os dois apps (Android/TWA, com o `android.yml`, e iPhone/WKWebView, com o `ios.yml`) estão prontos no ramo `lojas` deste
-repositório, que ainda não foi juntado ao `main` (no `main` ficam as versões anteriores de `android.yml` e
-`twa-manifest.json`; `ios/` e `ios.yml` só existem no `lojas`). Nada foi enviado às lojas. Falta o que só o Filipe pode
+Os dois apps (Android/TWA, com o `android.yml`, e iPhone/WKWebView, com o `ios.yml`) estão no `main` desde 03/11/2026 (o ramo
+`lojas` foi juntado com um merge e continua guardado). Os dois workflows rodam a partir do `main` (Run workflow ou push que
+mexa em `ios/`, `ios.yml`, `android.yml` ou `twa-manifest.json`). Sem os segredos `KEYSTORE_B64` e `KEYSTORE_PASSWORD`, o
+`android.yml` gera um build de TESTE (chave descartável, arquivos `TESTE-NAO-ENVIAR-*`, que não servem para a Play); no
+`ios.yml`, o Run workflow com a caixa "enviar" desmarcada só compila e testa (sem conta Apple), e o .app do Release sem
+assinatura fica como artefato. O site publicado não leva a pasta `ios/` (`pages.yml`). Nada foi enviado às lojas. Falta o que só o Filipe pode
 fazer, nesta ordem: número D-U-N-S, contas e pagamento na Google e na Apple, segredos no GitHub, rodar os workflows, fichas
 e envio para revisão; passo a passo em `site-nuvemshop/app_catalogo/lojas/PAGAR_E_PUBLICAR.md`.
 
