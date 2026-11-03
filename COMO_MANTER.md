@@ -145,7 +145,7 @@ Só com a sua autorização:
   está em "Ideias para depois" e "Ideias grandes" no MELHORIAS.md.
 - Publicar nas lojas de aplicativos. **Os dois apps estão prontos e nada foi enviado às lojas.** Google Play: app Android
   (Trusted Web Activity), workflow "Android (Google Play)"; iPhone: app nativo pequeno (WKWebView) que abre o mesmo
-  endereço, workflow "iOS (App Store)". Os dois estão no ramo `lojas` do repositório, ainda não juntado ao `main`. O que só
+  endereço, workflow "iOS (App Store)". Os dois estão no `main` desde 03/11/2026 e os workflows rodam a partir dele. O que só
   você pode fazer, em ordem (número D-U-N-S, contas e pagamento na Google e na Apple, segredos no GitHub, rodar os
   workflows, fichas e envio para revisão), está em `site-nuvemshop/app_catalogo/lojas/PAGAR_E_PUBLICAR.md`; os detalhes,
   em `play/GUIA_GOOGLE_PLAY.md` e `lojas/apple/GUIA_APPLE.md`.

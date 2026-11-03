@@ -163,7 +163,10 @@ Os dois apps (Android/TWA, com o `android.yml`, e iPhone/WKWebView, com o `ios.y
 mexa em `ios/`, `ios.yml`, `android.yml` ou `twa-manifest.json`). Sem os segredos `KEYSTORE_B64` e `KEYSTORE_PASSWORD`, o
 `android.yml` gera um build de TESTE (chave descartável, arquivos `TESTE-NAO-ENVIAR-*`, que não servem para a Play); no
 `ios.yml`, o Run workflow com a caixa "enviar" desmarcada só compila e testa (sem conta Apple), e o .app do Release sem
-assinatura fica como artefato. O site publicado não leva a pasta `ios/` (`pages.yml`). Nada foi enviado às lojas. Falta o que só o Filipe pode
+assinatura fica como artefato. O `pages.yml` publica o site sem a pasta `ios/`, mas enquanto Settings > Pages > Source estiver em "Deploy from a
+branch" o GitHub também publica a `main` crua (com `ios/`, nada secreto) a cada push; o `pages.yml` espera esse deploy
+antigo terminar para o dele ser o último. Para acabar com o deploy duplo, alguém com acesso de administrador troca a
+origem para "GitHub Actions". Nada foi enviado às lojas. Falta o que só o Filipe pode
 fazer, nesta ordem: número D-U-N-S, contas e pagamento na Google e na Apple, segredos no GitHub, rodar os workflows, fichas
 e envio para revisão; passo a passo em `site-nuvemshop/app_catalogo/lojas/PAGAR_E_PUBLICAR.md`.
 
