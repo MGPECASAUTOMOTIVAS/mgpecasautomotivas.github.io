@@ -106,25 +106,32 @@ mensagem amigável.
 3. Esperar o certificado HTTPS ser emitido (automático).
 4. Trocar `URL_DO_APP` no `trecho_site_baixe_app.html` e colar no site quando o Filipe autorizar.
 
-### Worker da placa (CORS) — obrigatório para a busca por placa funcionar no app
-O Worker `mg-placa` (buscador_veiculo/worker-placa/worker.js) só responde a origens listadas na variável `ORIGENS`
-(wrangler.toml: `https://www.mgpecasautomotivas.com.br,https://mgpecasautomotivas.com.br,https://mgmangueiras.com.br,https://www.mgmangueiras.com.br`).
-Para qualquer outra origem o Worker responde o preflight com `Access-Control-Allow-Origin: null`; o navegador bloqueia a
-chamada pelo CORS e o app nem recebe o 403 (o fetch falha com TypeError). Nesse caso o app mostra "A busca pela placa ainda
-está sendo liberada para o app. Enquanto isso, busque pelo veículo ou pelo código." com os botões "Buscar pelo veículo" e
-"Buscar por código ou nome" (app.js: motivoFalhaPlaca distingue CORS/rede de 404 "não encontrada", 429 e 5xx; a placa nunca
-vai para o console nem para o localStorage). Quando a origem for liberada, a mesma chamada passa a funcionar sem mudar o app. Para liberar, acrescentar a origem exata (esquema +
-host, sem caminho):
-- Opção A (endereço atual do app): `https://mgpecasautomotivas.github.io`
-- Opção B: `https://app.mgpecasautomotivas.com.br`
-(`https://filipefrancas.github.io` não precisa mais: o endereço antigo só redireciona.)
-Onde mudar: **sempre** em `[vars] ORIGENS` de `buscador_veiculo/worker-placa/wrangler.toml` e depois `npx wrangler deploy`
-(o Worker é publicado pelo wrangler, e cada deploy grava as variáveis do wrangler.toml por cima das do painel: uma origem
-acrescentada só em Cloudflare > Workers > mg-placa > Settings > Variables some no deploy seguinte). Se for mudado no painel,
-repetir a mudança no wrangler.toml, ou acrescentar `keep_vars = true` ao wrangler.toml. Nenhuma mudança no código do Worker é
-necessária. **Não foi feito nada no Cloudflare.**
-Se o app for empacotado para as lojas (Capacitor), as origens passam a ser `capacitor://localhost` (iOS) e `https://localhost`
-(Android); acrescentar também.
+### Worker da placa (CORS) — origem do app liberada em 02/11/2026
+O Worker `mg-placa` (https://mg-placa.filipefrancasilva10.workers.dev) só responde a origens listadas na variável `ORIGENS`.
+Desde 02/11/2026 a lista tem também a origem do app, `https://mgpecasautomotivas.github.io`, acrescentada com a autorização
+do Filipe ("pode liberar a placa no endereço novo") na versão 89ba40f8 do Worker, além das 4 do site
+(`https://www.mgpecasautomotivas.com.br`, `https://mgpecasautomotivas.com.br`, `https://mgmangueiras.com.br`,
+`https://www.mgmangueiras.com.br`). Conferido em 03/11/2026: o preflight (OPTIONS) com essa origem respondeu 204 com
+`Access-Control-Allow-Origin: https://mgpecasautomotivas.github.io`. A busca pela placa funciona no app, sem mudança no código
+do app. Os apps das lojas (Google Play/TWA e iPhone/WKWebView) abrem o próprio https://mgpecasautomotivas.github.io/, então a
+origem é a mesma e não há o que acrescentar (no app do iPhone, o domínio do Worker está em `WKAppBoundDomains`, em
+`ios/project.yml` do ramo `lojas`).
+O Worker é publicado pelo wrangler a partir da pasta de deploy do notebook (`Downloads\mg-buscador\worker-placa\deploy`); a
+cópia `buscador_veiculo/worker-placa/worker.js` da pasta do projeto é a de 26/10.
+Para uma origem fora da lista (por exemplo, o app rodando em `http://127.0.0.1:8765`), o Worker responde o preflight com
+`Access-Control-Allow-Origin: null`; o navegador bloqueia a chamada pelo CORS e o app nem recebe o 403 (o fetch falha com
+TypeError). Com internet, `motivoFalhaPlaca` (app.js) trata esse TypeError, e também um 403, como `bloqueada` (conexão
+bloqueada ou que falhou; separado de 404 "não encontrada", 429 e 5xx) e mostra `MSG_PLACA.bloqueada` com os botões "Buscar
+pelo veículo" e "Buscar por código ou nome"; a placa nunca vai para o console, para o endereço nem para o localStorage.
+Para acrescentar outra origem (esquema + host, sem caminho; por exemplo `https://app.mgpecasautomotivas.com.br`, se um dia o
+app tiver endereço próprio): mudar `ORIGENS` no arquivo de configuração do wrangler (`wrangler.jsonc` ou `wrangler.toml`) da
+pasta de deploy e rodar `npx wrangler deploy`. Cada deploy grava as variáveis desse arquivo por cima das do painel (uma origem
+acrescentada só em Cloudflare > Workers > mg-placa > Settings > Variables some no deploy seguinte); se mudar no painel,
+repita no arquivo ou use `keep_vars = true`. Nenhuma mudança no código do Worker é necessária para mudar origens. Antes de
+qualquer deploy, confira que `ORIGENS` continua com as 5 origens: a cópia `buscador_veiculo/worker-placa/wrangler.toml` da
+pasta do projeto ainda tem só as 4 do site (conferido em 03/11/2026), e um deploy com ela desligaria a busca pela placa no
+app.
+(`https://filipefrancas.github.io` não precisa: o endereço antigo só redireciona e nunca foi liberado.)
 
 ### Google Play (preparado em 02/11/2026; envio manual pelo Filipe)
 O app vai para a Play como Trusted Web Activity (TWA) gerada pelo Bubblewrap: um app Android que abre
@@ -145,7 +152,17 @@ https://mgpecasautomotivas.github.io/ em tela cheia. Arquivos no repositório:
   linkada no app de propósito (visual aprovado intocado).
 Fora do repositório, em `site-nuvemshop/app_catalogo/play/`: `chave/` (keystore, base64, senha, sha256 — guardar em lugar
 seguro), `ficha/` (ícone, gráfico de destaque, capturas 1080×1920 e textos.md) e o guia.
-Apple App Store: adiada (US$ 99/ano; empacotar via Capacitor quando for a hora).
+
+### App Store (iPhone) e situação das lojas em 03/11/2026
+O app do iPhone é uma casca nativa (Swift, WKWebView) que abre https://mgpecasautomotivas.github.io/: pasta `ios/` (projeto
+gerado pelo XcodeGen a partir de `ios/project.yml`) e workflow `.github/workflows/ios.yml` ("iOS (App Store)"), que compila no
+runner macOS do GitHub e, no Run workflow, assina e envia ao App Store Connect (TestFlight); não precisa de Mac. Guia:
+`site-nuvemshop/app_catalogo/lojas/apple/GUIA_APPLE.md`.
+Os dois apps (Android/TWA, com o `android.yml`, e iPhone/WKWebView, com o `ios.yml`) estão prontos no ramo `lojas` deste
+repositório, que ainda não foi juntado ao `main` (no `main` ficam as versões anteriores de `android.yml` e
+`twa-manifest.json`; `ios/` e `ios.yml` só existem no `lojas`). Nada foi enviado às lojas. Falta o que só o Filipe pode
+fazer, nesta ordem: número D-U-N-S, contas e pagamento na Google e na Apple, segredos no GitHub, rodar os workflows, fichas
+e envio para revisão; passo a passo em `site-nuvemshop/app_catalogo/lojas/PAGAR_E_PUBLICAR.md`.
 
 ### Dentro dos apps das lojas: nada de "instalar"
 O mesmo app roda dentro do app da Google Play (TWA) e do app do iPhone (WKWebView). Lá ele já está instalado, então o

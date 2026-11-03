@@ -877,7 +877,55 @@ async function capturar(page, nome) { if (capturas) { await page.waitForTimeout(
     }
   }
   ok(!cobertos.length, 'PC 1366: nenhuma parada do Tab coberta pelo topo ou pela barra de abas (ficha, Sobre e linha, com e sem a barra "Atualização disponível")' + (cobertos.length ? ': ' + cobertos.slice(0, 6).join(' | ') : ''));
+  /* bloco de tablet (app.css): só vale em tela de toque com os dois lados de 600 px ou mais; no PC fica de fora */
+  var MQ_TABLET = 'screen and (min-width: 600px) and (min-height: 600px) and (pointer: coarse)';
+  ok(!(await pPc.evaluate(function (q) { return matchMedia(q).matches; }, MQ_TABLET)), 'PC 1366: o bloco de tablet não vale');
   await cPc.close();
+
+  console.log('\nTablet e celular com toque');
+  /* celular (em pé e deitado) com toque: o bloco de tablet não vale; tablet: cartões lado a lado com a mesma altura e
+     aplicação com text-wrap: pretty */
+  var mqCel = [];
+  for (var vt of [[390, 844], [360, 800], [844, 390]]) {
+    var cT = await browser.newContext({ viewport: { width: vt[0], height: vt[1] }, isMobile: true, hasTouch: true, locale: 'pt-BR', serviceWorkers: 'block' });
+    await rotas(cT); var pT = await cT.newPage(); colher(pT, erros);
+    await pT.goto(base + '#/busca?q=radiador%20gol'); await pT.waitForSelector('#conteudo .painel-res .lista .item');
+    var mT = await pT.evaluate(function (q) { var it = document.querySelector('#conteudo .painel-res .lista > li > .item'); return [matchMedia('(pointer: coarse)').matches, matchMedia(q).matches, it.parentElement.tagName, getComputedStyle(document.querySelector('#conteudo .item-apl')).textWrap]; }, MQ_TABLET);
+    if (!mT[0] || mT[1] || /pretty/.test(mT[3] || '')) mqCel.push(vt.join('x') + ' ' + JSON.stringify(mT));
+    await cT.close();
+  }
+  ok(!mqCel.length, 'celular com toque (390x844, 360x800, 844x390): o bloco de tablet não vale e .item-apl segue sem text-wrap: pretty' + (mqCel.length ? ': ' + mqCel.join(' | ') : ''));
+  var cTab = await browser.newContext({ viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true, locale: 'pt-BR', serviceWorkers: 'block', userAgent: 'Mozilla/5.0 (iPad; CPU OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1' });
+  await rotas(cTab); var pTab = await cTab.newPage(); colher(pTab, erros);
+  await pTab.goto(base + '#/veiculo/Volkswagen/Gol/2010?motor=1.6'); await pTab.waitForSelector('#conteudo .painel-res .lista .item'); await listaCompleta(pTab);
+  var tab = await pTab.evaluate(function (q) {
+    var linhas = {}, desiguais = 0, pares = 0;
+    document.querySelectorAll('#conteudo .painel-res .lista > li').forEach(function (li) { var t = Math.round(li.getBoundingClientRect().top + scrollY); (linhas[t] = linhas[t] || []).push(Math.round(li.querySelector('.item').getBoundingClientRect().height)); });
+    Object.keys(linhas).forEach(function (t) { var h = linhas[t]; if (h.length < 2) return; pares++; if (Math.max.apply(null, h) - Math.min.apply(null, h) > 1) desiguais++; });
+    return { mq: matchMedia(q).matches, pares: pares, desiguais: desiguais, wrap: getComputedStyle(document.querySelector('#conteudo .item-apl')).textWrap || '', sup: !!(window.CSS && CSS.supports('text-wrap', 'pretty')), larg: document.documentElement.scrollWidth <= document.documentElement.clientWidth };
+  }, MQ_TABLET);
+  ok(tab.mq && tab.pares > 10 && tab.desiguais === 0 && tab.larg, 'tablet 820x1180 (iPad, toque): Gol 2010 1.6 com ' + tab.pares + ' pares de cartões e ' + tab.desiguais + ' de altura diferente, sem rolagem horizontal');
+  ok(tab.sup ? /pretty/.test(tab.wrap) : true, 'tablet: aplicação do cartão com text-wrap: pretty (' + (tab.wrap || 'sem suporte') + ')');
+  await cTab.close();
+
+  /* placa: com internet, a chamada ao serviço que não se completa (rotas abortam o Worker → TypeError) mostra a mensagem
+     neutra, sem dizer que a busca "ainda está sendo liberada", com os dois botões para a Busca */
+  console.log('\nPlaca: falha de conexão com o serviço');
+  var pPl = await ctx.newPage(), avisosPl = []; colher(pPl, erros);
+  pPl.on('console', function (m) { if (m.type() === 'warning') avisosPl.push(m.text()); });
+  await pPl.goto(base + '#/placa'); await pPl.waitForSelector('#conteudo .entrada-placa');
+  await pPl.fill('#conteudo .entrada-placa', 'ABC1D23'); await pPl.click('#conteudo .btn-amarelo');
+  await pPl.waitForFunction(function () { return !/Consultando/.test(document.getElementById('conteudo').textContent); }, null, { timeout: 15000 });
+  var falhaPl = await pPl.evaluate(function () {
+    var c = document.getElementById('conteudo'), st = c.querySelectorAll('.status');
+    return { txt: Array.prototype.map.call(st, function (s) { return s.textContent.trim(); }).join(' | '), info: Array.prototype.some.call(st, function (s) { return s.classList.contains('info'); }),
+      botoes: Array.prototype.map.call(c.querySelectorAll('.campo a.btn[href="#/busca"]'), function (a) { return a.textContent.trim(); }), liberada: /liberad/i.test(c.textContent) };
+  });
+  ok(falhaPl.txt === 'Não conseguimos acessar o serviço de consulta de placa agora. Tente de novo ou busque pelo veículo ou pelo código.' && falhaPl.info && !falhaPl.liberada, 'placa sem resposta do serviço: aviso informativo "' + falhaPl.txt + '"');
+  ok(falhaPl.botoes.join(' + ') === 'Buscar pelo veículo + Buscar por código ou nome', 'placa sem resposta do serviço: botões ' + falhaPl.botoes.join(' + '));
+  ok(avisosPl.some(function (t) { return t === 'placa: bloqueada (TypeError)'; }) && !avisosPl.some(function (t) { return /ABC1D23/.test(t); }), 'console: só "placa: bloqueada (TypeError)", nunca a placa (' + avisosPl.join(' | ') + ')');
+  await capturar(pPl, '18-placa-falha-conexao');
+  await pPl.close();
 
   console.log('\nFotos sem conexão');
   /* foto que ainda não está no aparelho: sem conexão diz isso (e não "Sem foto"); a rede voltando, ela aparece sozinha */

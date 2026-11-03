@@ -864,6 +864,14 @@ body:has(.aviso-atualizar:not([hidden])), body:not(.rota-inicio):not(.rota-insta
 .segmentos-largo { display: flex; width: 100%; }
 .link-acao.link-etiqueta { margin: 0 0 -10px; }
 
+/* ---------- tablet e iPad (tela de toque com os dois lados de 600px ou mais; celular e PC não entram) ----------
+   Cartões de resultado lado a lado com a mesma altura (o "+" fica centrado) e sem número sozinho na última linha da
+   aplicação ("e mais / 3"). A faixa de instalar já não cobre o fim da página: a regra geral do body (+96px) vale aqui. */
+@media screen and (min-width: 600px) and (min-height: 600px) and (pointer: coarse) {
+  .painel-res .lista > li > .item { height: 100%; }
+  .item-apl { text-wrap: pretty; }
+}
+
 /* ---------- imprimir ou salvar em PDF ----------
    A folha (#impressao) existe só durante a impressão (app.js: montarFolha/limparFolha, body.imprimindo). Preto no branco,
    fontes do sistema, sem fundo colorido, igual nos dois temas; thead repetido a cada página e linhas sem cortar. A4 e Carta. */

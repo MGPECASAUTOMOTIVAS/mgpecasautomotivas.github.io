@@ -1465,8 +1465,9 @@
       .finally(function () { if (timer) clearTimeout(timer); });
   }
   /* Por que a consulta falhou (sem a placa em nenhuma mensagem nem no console):
-     'bloqueada'  — o Worker ainda não libera a origem do app (CORS: o fetch cai em TypeError com internet) ou respondeu 403;
-                    assim que a origem entrar na lista do Worker, a mesma chamada passa a funcionar sem mudar o app.
+     'bloqueada'  — com internet, o fetch caiu em TypeError (a conexão com o Worker foi bloqueada ou falhou: rede que barra o
+                    endereço, queda no caminho, erro do Cloudflare sem cabeçalho CORS ou origem fora de ORIGENS) ou o Worker
+                    respondeu 403. A origem do app está em ORIGENS desde 02/11/2026 (LEIA-ME.md, "Worker da placa").
      'offline', 'demorou', 'nao-encontrada' (404), 'limite' (429), 'servico' (5xx) e 'outro'. */
   function motivoFalhaPlaca(e) {
     if (!navigator.onLine) return 'offline';
@@ -1478,7 +1479,7 @@
     return 'outro';
   }
   var MSG_PLACA = {
-    bloqueada: 'A busca pela placa ainda está sendo liberada para o app. Enquanto isso, busque pelo veículo ou pelo código.',
+    bloqueada: 'Não conseguimos acessar o serviço de consulta de placa agora. Tente de novo ou busque pelo veículo ou pelo código.',
     offline: 'Sem conexão. A busca pela placa precisa de internet; você pode buscar escolhendo marca, modelo e ano.',
     demorou: 'A consulta demorou demais. Tente de novo ou busque pelo veículo.',
     'nao-encontrada': 'Não encontramos o veículo desta placa. Confira os caracteres ou busque pelo veículo.',
@@ -1518,7 +1519,7 @@
     }).catch(function (e) {
       var motivo = motivoFalhaPlaca(e);
       area.innerHTML = '';
-      /* liberação pendente não é falha do usuário: aviso informativo; placa inexistente e limite: atenção; o resto: erro */
+      /* conexão bloqueada ou que falhou não é erro do usuário: aviso informativo; placa inexistente e limite: atenção; o resto: erro */
       area.appendChild(status(MSG_PLACA[motivo], motivo === 'bloqueada' ? 'info' : (motivo === 'nao-encontrada' || motivo === 'limite' ? 'aviso' : 'erro')));
       area.appendChild(el('div', { class: 'campo' }, [el('a', { class: 'btn btn-contorno', href: '#/busca' }, [svg(ICONES.carro), 'Buscar pelo veículo'])]));
       if (motivo === 'bloqueada' || motivo === 'nao-encontrada') area.appendChild(el('div', { class: 'campo' }, [el('a', { class: 'btn btn-neutro', href: '#/busca' }, [svg(ICONES.busca), 'Buscar por código ou nome'])]));
@@ -1933,8 +1934,8 @@
         el('h2', { text: 'Como funciona' }),
         el('ul', { class: 'lista-sobre' }, [
           el('li', {}, [svg(ICONES.ok), el('span', { text: 'A placa é usada só para identificar marca, modelo, ano e motor.' })]),
-          el('li', {}, [svg(ICONES.ok), el('span', { text: 'Nenhum dado do proprietário é consultado. A placa fica só enquanto o app está aberto (para você não digitar de novo ao voltar) e não é registrada: em Recentes guardamos só marca, modelo e ano.' })]),
-          el('li', {}, [svg(ICONES.ok), el('span', { text: 'Se a consulta falhar ou ainda não estiver liberada, escolha marca, modelo e ano na aba Busca.' })])
+          el('li', {}, [svg(ICONES.ok), el('span', { text: 'Nenhum dado do proprietário é usado nem guardado. No app, a placa fica só enquanto ele está aberto (para você não digitar de novo ao voltar); em Recentes guardamos só marca, modelo, ano e motor. O serviço da placa guarda a resposta de cada placa por até 90 dias, sem ligar a quem consultou.' })]),
+          el('li', {}, [svg(ICONES.ok), el('span', { text: 'Se a consulta falhar, escolha marca, modelo e ano na aba Busca.' })])
         ])
       ])
     ]);

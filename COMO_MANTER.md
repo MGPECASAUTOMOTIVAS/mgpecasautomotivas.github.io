@@ -117,7 +117,7 @@ Precisa do Node.js e do Playwright com o Chromium (uma vez só: `npm install -g 
 node teste/fumaca.js
 ```
 Em cerca de 1 minuto ele percorre o app inteiro (Início, buscas, ficha, favoritos, Minha lista, Imprimir / PDF, etiquetas, busca por voz, compartilhar,
-instalar, apps das lojas, tema claro por padrão, versão, uso sem internet) e termina com `309/309 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
+instalar, apps das lojas, tema claro por padrão, tablet, falha da placa, versão, uso sem internet) e termina com `316/316 verificações`. Se aparecer `FALHA`, não publique: leia a linha que falhou.
 Para guardar capturas de tela: `node teste/fumaca.js --capturas pasta_das_capturas`.
 
 ## 6. Onde estão as regras
@@ -129,12 +129,12 @@ Para guardar capturas de tela: `node teste/fumaca.js --capturas pasta_das_captur
 
 ## 7. O que depende do notebook e o que depende de você
 Precisa do notebook (o agente não alcança):
-- **Busca pela placa.** O serviço `mg-placa` no Cloudflare só responde ao site. Para o app funcionar no endereço novo,
-  acrescentar `https://mgpecasautomotivas.github.io` na variável `ORIGENS` do `wrangler.toml` (pasta
-  `Downloads\mg-buscador\worker-placa\deploy`, ver `buscador_veiculo/worker-placa/PASSO_A_PASSO.md`) e rodar
-  `npx wrangler deploy`. Enquanto isso não for feito, a busca pela placa no app mostra a mensagem "ainda está sendo
-  liberada" (o endereço antigo nunca foi liberado, então nada deixou de funcionar). O app já está pronto: nada muda no
-  código quando a origem for liberada.
+- **Busca pela placa: já funciona no app.** O serviço `mg-placa` no Cloudflare aceita o endereço do app
+  (`https://mgpecasautomotivas.github.io`) desde 02/11/2026, com a sua autorização ("pode liberar a placa no endereço
+  novo"; versão 89ba40f8 do serviço). Conferido em 03/11/2026. O notebook só volta a ser preciso para mudar a lista de
+  endereços aceitos (variável `ORIGENS` na pasta `Downloads\mg-buscador\worker-placa\deploy` e `npx wrangler deploy`; ver
+  `buscador_veiculo/worker-placa/PASSO_A_PASSO.md` e LEIA-ME.md, "Worker da placa"). Antes de um deploy, confira que o
+  endereço do app continua na lista: sem ele, a busca pela placa no app volta a falhar.
 - **Painel da Nuvemshop** (fotos e fichas do site) e a conferência do filtro de marca do Mercado Livre
   (`mlMarcaId` em `config.js`, ver LEIA-ME.md).
 
@@ -143,7 +143,9 @@ Só com a sua autorização:
 - Endereço próprio `app.mgpecasautomotivas.com.br` (registro no DNS; ver LEIA-ME.md).
 - Qualquer mudança de cadastro (peça, aplicação, número original, nome de modelo): a lista do que espera decisão
   está em "Ideias para depois" e "Ideias grandes" no MELHORIAS.md.
-- Publicar nas lojas de aplicativos. **Google Play: tudo o que dava para preparar está pronto** (chave, configuração,
-  workflow "Android (Google Play)", página de privacidade, textos e imagens da ficha); o passo a passo do que só você pode
-  fazer (conta, US$ 25, segredos no GitHub, envio do .aab) está em `site-nuvemshop/app_catalogo/play/GUIA_GOOGLE_PLAY.md`.
-  App Store: adiada.
+- Publicar nas lojas de aplicativos. **Os dois apps estão prontos e nada foi enviado às lojas.** Google Play: app Android
+  (Trusted Web Activity), workflow "Android (Google Play)"; iPhone: app nativo pequeno (WKWebView) que abre o mesmo
+  endereço, workflow "iOS (App Store)". Os dois estão no ramo `lojas` do repositório, ainda não juntado ao `main`. O que só
+  você pode fazer, em ordem (número D-U-N-S, contas e pagamento na Google e na Apple, segredos no GitHub, rodar os
+  workflows, fichas e envio para revisão), está em `site-nuvemshop/app_catalogo/lojas/PAGAR_E_PUBLICAR.md`; os detalhes,
+  em `play/GUIA_GOOGLE_PLAY.md` e `lojas/apple/GUIA_APPLE.md`.

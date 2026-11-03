@@ -5,7 +5,7 @@
      - local (padrão, funciona offline e no GitHub Pages): 'dados/'
      - produção via jsDelivr: 'https://cdn.jsdelivr.net/gh/filipefrancas/mg-site-arquivos@main/busca-veiculo/'
    detalhesUrl: aplicações, números originais e linha de cada peça (gerado para o app).
-   placaUrl: Worker da consulta de placa (precisa liberar a origem do app no CORS; ver LEIA-ME.md).
+   placaUrl: Worker da consulta de placa (aceita só as origens de ORIGENS; a do app entrou em 02/11/2026; ver LEIA-ME.md).
    loja: site da MG; páginas de produto em loja + '/produtos/<handle>/'.
    urlApp: endereço público do app, usado nos links de "Compartilhar" (vazio = usa o endereço atual).
    etiquetas: false mantém a tela de etiquetas com QR desligada (código guardado; decisão do Filipe em 02/11).
@@ -19,5 +19,5 @@ self.MG_CONFIG = {
   mlSufixo: 'MG Mangueiras - MG Peças Automotivas',
   mlMarcaId: '64522',
   etiquetas: false,
-  versao: '2026.11.02-34'
+  versao: '2026.11.02-35'
 };
