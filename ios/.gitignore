@@ -1,0 +1,6 @@
+# gerados no runner pelo XcodeGen e pelo xcodebuild (ver project.yml)
+*.xcodeproj/
+MGPecas/Info.plist
+build/
+DerivedData/
+*.xcarchive

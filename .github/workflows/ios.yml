@@ -1,0 +1,288 @@
+# App do iPhone do catálogo MG (pasta ios/): casca nativa com WKWebView que abre https://mgpecasautomotivas.github.io/.
+# O projeto Xcode é gerado aqui, no runner macOS do GitHub, a partir de ios/project.yml (XcodeGen).
+#
+# Dois trabalhos:
+#  1. "verificar" (todo push no branch lojas que mexa em ios/ ou neste arquivo, e a cada Run workflow): compila para o
+#     simulador SEM assinatura e abre o app num iPhone simulado: confere a página, o service worker, a ponte de
+#     impressão/compartilhamento, o funcionamento sem o site no ar e a tela "sem internet". Não precisa de conta Apple.
+#  2. "enviar" (só em Actions → "iOS (App Store)" → Run workflow): arquiva, assina sozinho (assinatura automática na
+#     nuvem da Apple) e envia ao App Store Connect, onde o build aparece no TestFlight. Nada vai para a App Store sem o
+#     Filipe enviar para revisão no App Store Connect.
+#
+# Segredos do "enviar" (Settings → Secrets and variables → Actions → New repository secret), ver lojas/apple/GUIA_APPLE.md:
+#   ASC_KEY_ID       ID da chave da API do App Store Connect (10 caracteres)
+#   ASC_ISSUER_ID    Issuer ID (aparece no alto da página das chaves)
+#   ASC_KEY_P8_B64   a chave AuthKey_XXXXXXXXXX.p8: o texto do arquivo (de BEGIN a END) ou o arquivo em base64
+#                    (nunca no repositório)
+#   APPLE_TEAM_ID    Team ID da conta de desenvolvedor (10 caracteres, em developer.apple.com → Membership details)
+# A chave precisa da função (role) Admin: só ela pode usar o certificado de distribuição gerenciado na nuvem.
+name: iOS (App Store)
+
+on:
+  push:
+    branches:
+      - lojas
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: 'Versão que aparece na App Store (ex.: 1.0.1). Vazio = a do ios/project.yml'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BUNDLE_ID: br.com.mgpecasautomotivas.catalogo
+  HOMEBREW_NO_AUTO_UPDATE: '1'
+  HOMEBREW_NO_INSTALL_CLEANUP: '1'
+
+jobs:
+  verificar:
+    name: Compilar para o simulador e testar (sem assinatura)
+    # macOS 26 em processador Intel: os runners macOS com chip Apple (macos-26) estavam sem vaga (o job esperou 15 min
+    # e foi cancelado pelo GitHub). O Intel compila o mesmo app, com o mesmo Xcode 26.
+    runs-on: macos-26-intel
+    timeout-minutes: 45
+    steps:
+      - name: Baixar o repositório
+        uses: actions/checkout@v4
+
+      - name: Escolher o Xcode (26 ou mais novo, exigência da Apple desde 28/04/2026)
+        run: |
+          atual=$(xcodebuild -version | head -n 1 | awk '{print $2}' | cut -d. -f1)
+          if [ "${atual:-0}" -lt 26 ]; then
+            novo=$(ls -d /Applications/Xcode_2[6-9]*.app 2> /dev/null | sort -V | tail -n 1)
+            [ -n "$novo" ] || { echo "::error::Nenhum Xcode 26 ou mais novo neste runner."; exit 1; }
+            sudo xcode-select -s "$novo/Contents/Developer"
+          fi
+          xcodebuild -version
+
+      - name: Instalar o XcodeGen
+        run: brew install xcodegen && xcodegen --version
+
+      - name: Gerar o projeto Xcode (ios/project.yml)
+        working-directory: ios
+        run: xcodegen generate --spec project.yml
+
+      - name: Compilar para o simulador (sem assinatura)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project MGPecas.xcodeproj -scheme MGPecas -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/build.log" | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)|\*\* " || true
+          if ! grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/build.log"; then tail -n 120 "$RUNNER_TEMP/build.log"; exit 1; fi
+          APP="$PWD/build/Build/Products/Debug-iphonesimulator/MGPecas.app"
+          test -d "$APP"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleDisplayName" -c "Print :WKAppBoundDomains" -c "Print :NSPhotoLibraryAddUsageDescription" "$APP/Info.plist"
+          # manifesto de privacidade dentro do app (sem rastreamento; só "Search History", como no App Privacy)
+          plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          plutil -p "$APP/PrivacyInfo.xcprivacy"
+          echo "APP=$APP" >> "$GITHUB_ENV"
+
+      - name: Compilar o Release para iPhone (sem assinatura) e conferir que ele não tem o código de teste
+        # O que vai para a App Store é o Release. Os argumentos de teste (-mgDiagnostico, -mgEndereco, -mgTema, -mgLista)
+        # e o inspetor da página só existem no Debug (#if DEBUG). Prova: textos desse código estão no Debug (controle) e
+        # não podem estar no Release; se estiverem, o job falha.
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project MGPecas.xcodeproj -scheme MGPecas -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/release.log" | grep -E "error:|BUILD (SUCCEEDED|FAILED)|\*\* " || true
+          if ! grep -q "BUILD SUCCEEDED" "$RUNNER_TEMP/release.log"; then tail -n 120 "$RUNNER_TEMP/release.log"; exit 1; fi
+          REL="$PWD/build/Build/Products/Release-iphoneos/MGPecas.app"
+          test -d "$REL"
+          plutil -lint "$REL/PrivacyInfo.xcprivacy"
+          for t in "localStorage.setItem('mg-tema'" "localStorage.setItem('mg-lista'" "MG-DIAGNOSTICO-ERRO" "getRegistrations"; do
+            grep -r -q -F "$t" "$APP" || { echo "::error::Controle falhou: '$t' não foi achado no build Debug."; exit 1; }
+            if grep -r -q -F "$t" "$REL"; then echo "::error::O build Release tem código de teste ('$t')."; exit 1; fi
+          done
+          echo "Release sem o código de teste: -mgDiagnostico, -mgEndereco, -mgTema e -mgLista não fazem nada no app da loja."
+
+      - name: Abrir no iPhone simulado e conferir (catálogo, service worker, sem o site no ar, sem internet)
+        # teste de comportamento: se falhar, o build continua valendo; o resultado fica no log e nas imagens
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          set -u
+          SAIDA="$RUNNER_TEMP/simulador"; mkdir -p "$SAIDA"
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)['devices']
+          c = [(rt, x['name'], x['udid']) for rt, xs in d.items() if 'iOS' in rt for x in xs if x['name'].startswith('iPhone')]
+          p = [x for x in c if 'Pro Max' in x[1]] or c
+          p.sort()
+          print(p[-1][2])")
+          xcrun simctl list devices | grep "$UDID"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b > /dev/null
+          xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3 || true
+          xcrun simctl install "$UDID" "$APP"
+          # miniatura em JPEG no log (para conferir a tela sem baixar o artefato)
+          miniatura() { sips -s format jpeg -s formatOptions 60 -Z 640 "$1" --out "$SAIDA/m.jpg" > /dev/null && echo "MINIATURA-INICIO $2" && base64 -i "$SAIDA/m.jpg" | fold -w 120 && echo "MINIATURA-FIM $2"; }
+          abrir() { # $1 = nome, $2.. = argumentos do app
+            nome="$1"; shift
+            xcrun simctl launch --terminate-running-process --stderr="$SAIDA/$nome.txt" "$UDID" "$BUNDLE_ID" -mgDiagnostico "$@" > /dev/null
+            sleep 32
+            xcrun simctl io "$UDID" screenshot "$SAIDA/$nome.png" > /dev/null
+            echo "--- $nome"; grep "MG-DIAGNOSTICO" "$SAIDA/$nome.txt" || echo "(sem diagnóstico)"
+          }
+          # 1. primeira abertura, com internet
+          abrir 1-primeira-abertura
+          miniatura "$SAIDA/1-primeira-abertura.png" 1-primeira-abertura
+          # 2. segunda abertura (o service worker já controla a página)
+          abrir 2-segunda-abertura -mgEndereco "https://mgpecasautomotivas.github.io/#/peca/MG001"
+          miniatura "$SAIDA/2-segunda-abertura.png" 2-segunda-abertura
+          # 3. com o site fora do ar para o aparelho (endereço bloqueado): o catálogo tem que abrir do que ficou guardado
+          echo "0.0.0.0 mgpecasautomotivas.github.io" | sudo tee -a /etc/hosts > /dev/null
+          sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder || true
+          abrir 3-sem-o-site -mgEndereco "https://mgpecasautomotivas.github.io/#/busca"
+          miniatura "$SAIDA/3-sem-o-site.png" 3-sem-o-site
+          # 4. app recém-instalado sem acesso ao site: tela nativa "sem internet"
+          xcrun simctl uninstall "$UDID" "$BUNDLE_ID"
+          xcrun simctl install "$UDID" "$APP"
+          abrir 4-primeira-vez-sem-site
+          miniatura "$SAIDA/4-primeira-vez-sem-site.png" 4-primeira-vez-sem-site
+          sudo sed -i '' '/mgpecasautomotivas.github.io/d' /etc/hosts
+          sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder || true
+          rm -f "$SAIDA/m.jpg"
+
+      - name: Guardar as telas do simulador (7 dias)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulador-telas
+          path: ${{ runner.temp }}/simulador/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  enviar:
+    name: Arquivar, assinar e enviar ao App Store Connect (TestFlight)
+    if: github.event_name == 'workflow_dispatch'
+    needs: verificar
+    runs-on: macos-26-intel
+    timeout-minutes: 60
+    steps:
+      - name: Conferir os segredos
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8_B64: ${{ secrets.ASC_KEY_P8_B64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          faltam=""
+          [ -n "$ASC_KEY_ID" ] || faltam="$faltam ASC_KEY_ID"
+          [ -n "$ASC_ISSUER_ID" ] || faltam="$faltam ASC_ISSUER_ID"
+          [ -n "$ASC_KEY_P8_B64" ] || faltam="$faltam ASC_KEY_P8_B64"
+          [ -n "$APPLE_TEAM_ID" ] || faltam="$faltam APPLE_TEAM_ID"
+          if [ -n "$faltam" ]; then
+            echo "::error::Faltam os segredos:$faltam. Crie em Settings → Secrets and variables → Actions (veja lojas/apple/GUIA_APPLE.md) e rode de novo."
+            exit 1
+          fi
+          echo "Segredos encontrados."
+
+      - name: Baixar o repositório
+        uses: actions/checkout@v4
+
+      - name: Escolher o Xcode (26 ou mais novo)
+        run: |
+          atual=$(xcodebuild -version | head -n 1 | awk '{print $2}' | cut -d. -f1)
+          if [ "${atual:-0}" -lt 26 ]; then
+            novo=$(ls -d /Applications/Xcode_2[6-9]*.app 2> /dev/null | sort -V | tail -n 1)
+            [ -n "$novo" ] || { echo "::error::Nenhum Xcode 26 ou mais novo neste runner."; exit 1; }
+            sudo xcode-select -s "$novo/Contents/Developer"
+          fi
+          xcodebuild -version
+
+      - name: Instalar o XcodeGen e gerar o projeto
+        working-directory: ios
+        run: brew install xcodegen && xcodegen generate --spec project.yml
+
+      - name: Preparar a chave da API (arquivo temporário, apagado no fim)
+        env:
+          ASC_KEY_P8_B64: ${{ secrets.ASC_KEY_P8_B64 }}
+        run: |
+          D="$RUNNER_TEMP/asc"; mkdir -p "$D"; chmod 700 "$D"
+          if printf '%s' "$ASC_KEY_P8_B64" | grep -q "BEGIN PRIVATE KEY"; then
+            printf '%s\n' "$ASC_KEY_P8_B64" | tr -d '\r' > "$D/AuthKey.p8"   # colado como texto do .p8 (sem os \r do Windows)
+          else
+            printf '%s' "$ASC_KEY_P8_B64" | tr -d '\n\r ' | base64 --decode > "$D/AuthKey.p8"
+          fi
+          if ! grep -q "BEGIN PRIVATE KEY" "$D/AuthKey.p8"; then
+            echo "::error::O segredo ASC_KEY_P8_B64 não é a chave .p8: cole o texto do arquivo, de BEGIN PRIVATE KEY até END PRIVATE KEY, ou o arquivo em base64 (veja lojas/apple/GUIA_APPLE.md)."
+            exit 1
+          fi
+          echo "ASC_KEY_PATH=$D/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Versão e número do build
+        env:
+          VERSAO_PEDIDA: ${{ github.event.inputs.versao }}
+        run: |
+          VERSAO="$VERSAO_PEDIDA"
+          if [ -z "$VERSAO" ]; then VERSAO=$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9.]*\)"\{0,1\} *$/\1/p' ios/project.yml | head -n 1); fi
+          case "$VERSAO" in
+            ''|*[!0-9.]*) echo "::error::Versão inválida: '$VERSAO' (use números e pontos, ex.: 1.0.1)."; exit 1 ;;
+          esac
+          # número do build = número deste run × 10 + tentativa: sempre maior que o do envio anterior, também num
+          # "Re-run" (que repete o número do run, mas não a tentativa)
+          BUILD=$(( ${{ github.run_number }} * 10 + ${{ github.run_attempt }} ))
+          echo "VERSAO=$VERSAO" >> "$GITHUB_ENV"
+          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
+          echo "Versão $VERSAO, build $BUILD"
+
+      - name: Arquivar (Release; a assinatura é feita no envio)
+        working-directory: ios
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -project MGPecas.xcodeproj -scheme MGPecas -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/MGPecas.xcarchive" \
+            MARKETING_VERSION="$VERSAO" CURRENT_PROJECT_VERSION="$BUILD" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGNING_ALLOWED=NO archive 2>&1 | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)|\*\* " || true
+          if ! grep -q "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log"; then tail -n 120 "$RUNNER_TEMP/archive.log"; exit 1; fi
+          # o app arquivado não pode ter o código de teste do Debug (ver o job "verificar")
+          ARQ="$RUNNER_TEMP/MGPecas.xcarchive/Products/Applications/MGPecas.app"
+          test -d "$ARQ"
+          for t in "localStorage.setItem('mg-tema'" "localStorage.setItem('mg-lista'" "MG-DIAGNOSTICO-ERRO" "getRegistrations"; do
+            if grep -r -q -F "$t" "$ARQ"; then echo "::error::O app arquivado tem código de teste ('$t'). Nada foi enviado."; exit 1; fi
+          done
+
+      - name: Assinar e enviar ao App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" << PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/MGPecas.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/envio" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          echo "::notice::Build $BUILD (versão $VERSAO) enviado. Em 5 a 30 minutos ele aparece no App Store Connect → TestFlight."
+
+      - name: Apagar a chave da API
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"
